@@ -374,7 +374,7 @@ const OCRCapture = () => {
     }
   };
 
-  // OCR結果から情報を抽出する関数（改良版）
+  // OCR結果から情報を抽出する関数（精度向上版・漢数字対応）
   const extractComprehensiveInfo = (ocrResults) => {
     const extracted = {
       lastName: '',
@@ -390,184 +390,215 @@ const OCRCapture = () => {
       notes: ''
     };
 
-    try {
-      // 全てのテキストを結合
-      const allText = Object.values(ocrResults).join('\n');
-      console.log('統合テキスト:', allText);
+    // ノイズ除去・前処理
+    const cleanText = (text) => {
+      if (!text) return '';
+      return text
+        .replace(/[\s　]+/g, ' ')
+        .replace(/[|｜¦]/g, '')
+        .replace(/[‐―－ーｰ]/g, '-')
+        .replace(/[“”"'‘’]/g, '')
+        .replace(/[()（）〔〕［］【】｛｝{}]/g, '')
+        .replace(/[\r\n]+/g, '\n')
+        .replace(/\u3000/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    };
 
-      // 金額の抽出（複数のパターンに対応）
-      const amountPatterns = [
-        /金\s*(\d{1,3}(?:,\d{3})*)\s*円/,
-        /(\d{1,3}(?:,\d{3})*)\s*円/,
-        /金額\s*(\d{1,3}(?:,\d{3})*)/,
-        /¥\s*(\d{1,3}(?:,\d{3})*)/,
-        /金\s*(\d+)/
-      ];
+    // --- 漢数字→アラビア数字変換 ---
+    const kanjiNumMap = {
+      '〇': 0, '零': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9,
+      '十': 10, '百': 100, '千': 1000, '万': 10000, '億': 100000000, '兆': 1000000000000
+    };
+    // 例: "三千二百五十" → 3250
+    function kanjiToNumber(kanji) {
+      if (!kanji) return '';
+      let num = 0, tmp = 0, man = 0;
+      for (let i = 0; i < kanji.length; i++) {
+        const c = kanji[i];
+        if (c === '万' || c === '億' || c === '兆') {
+          man += (tmp === 0 ? 1 : tmp) * kanjiNumMap[c];
+          tmp = 0;
+        } else if (c === '千' || c === '百' || c === '十') {
+          tmp += (tmp % kanjiNumMap[c] === 0 ? (tmp === 0 ? 1 : 0) : 0) * kanjiNumMap[c];
+          tmp = (tmp === 0 ? 1 : tmp) * kanjiNumMap[c];
+        } else if (kanjiNumMap[c] !== undefined) {
+          tmp += kanjiNumMap[c];
+        } else if (!isNaN(Number(c))) {
+          tmp = tmp * 10 + Number(c);
+        }
+      }
+      num += man + tmp;
+      return num ? String(num) : '';
+    }
 
+    // --- 大字→通常漢数字変換 ---
+    const daijiMap = {
+      '壱': '一', '弐': '二', '貳': '二', '参': '三', '參': '三', '肆': '四', '伍': '五', '陸': '六', '漆': '七', '柒': '七', '捌': '八', '玖': '九', '拾': '十', '廿': '二十', '卅': '三十', '卌': '四十', '陌': '百', '佰': '百', '阡': '千', '仟': '千', '萬': '万'
+    };
+    const normalizeKanji = (str) => {
+      if (!str) return '';
+      return str.replace(/[壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]/g, c => daijiMap[c] || c);
+    };
+
+    // 全OCR面のテキストを結合
+    const allText = Object.values(ocrResults).map(cleanText).join('\n');
+    const allTexts = Object.entries(ocrResults).map(([k, v]) => [k, cleanText(v)]);
+
+    // 金額抽出（全角数字・誤認識・漢数字・大字対応）
+    const normalizeNumber = (str) => {
+      if (!str) return '';
+      // まず大字→漢数字→アラビア数字化
+      let kanjiNorm = normalizeKanji(str);
+      let arabic = kanjiNorm
+        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 65248))
+        .replace(/[,，]/g, '');
+      if (/^[一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+$/.test(arabic)) {
+        return kanjiToNumber(arabic);
+      }
+      // 漢数字+アラビア数字混在パターンも対応
+      if (/([一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+)([0-9]*)/.test(arabic)) {
+        const m = arabic.match(/([一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+)/);
+        if (m) return kanjiToNumber(m[1]) + (arabic.replace(m[1], ''));
+      }
+      return arabic.replace(/[^0-9]/g, '');
+    };
+    const amountPatterns = [
+      /金[\s:]*([0-9０-９,，一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+)[\s]*円/,
+      /([0-9０-９,，一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+)[\s]*円/,
+      /金額[\s:]*([0-9０-９,，一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+)/,
+      /¥[\s:]*([0-9０-９,，一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+)/,
+      /金[\s:]*([0-9０-９,，一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+)/
+    ];
+    let foundAmount = '';
+    for (const [key, text] of allTexts) {
       for (const pattern of amountPatterns) {
-        const match = allText.match(pattern);
+        const match = text.match(pattern);
         if (match) {
-          extracted.amount = match[1].replace(/,/g, '');
-          console.log('金額抽出:', extracted.amount);
+          foundAmount = normalizeNumber(match[1]);
+          if (foundAmount.length >= 3) break;
+        }
+      }
+      if (foundAmount.length >= 3) break;
+    }
+    extracted.amount = foundAmount;
+
+    // innerFront優先
+    if (ocrResults.innerFront) {
+      for (const pattern of amountPatterns) {
+        const match = cleanText(ocrResults.innerFront).match(pattern);
+        if (match) {
+          extracted.innerAmount = normalizeNumber(match[1]);
+          if (!extracted.amount) extracted.amount = extracted.innerAmount;
           break;
         }
       }
-
-      // 中袋の金額抽出（innerFrontから優先的に）
-      if (ocrResults.innerFront) {
-        for (const pattern of amountPatterns) {
-          const match = ocrResults.innerFront.match(pattern);
-          if (match) {
-            extracted.innerAmount = match[1].replace(/,/g, '');
-            if (!extracted.amount) {
-              extracted.amount = extracted.innerAmount;
-            }
-            console.log('中袋金額抽出:', extracted.innerAmount);
-            break;
-          }
-        }
-      }
-
-      // 名前の抽出（表面から）
-      if (ocrResults.front) {
-        const frontText = ocrResults.front;
-        console.log('表面テキスト:', frontText);
-
-        // 会社名のパターン
-        const companyPatterns = [
-          /株式会社\s*(\S+)/,
-          /有限会社\s*(\S+)/,
-          /(\S+)\s*株式会社/,
-          /(\S+)\s*有限会社/,
-          /(\S+)\s*会社/,
-          /(\S+)\s*商会/,
-          /(\S+)\s*工業/,
-          /(\S+)\s*建設/
-        ];
-
-        for (const pattern of companyPatterns) {
-          const match = frontText.match(pattern);
-          if (match) {
-            extracted.companyName = match[0];
-            console.log('会社名抽出:', extracted.companyName);
-            break;
-          }
-        }
-
-        // 個人名の抽出（会社名が見つからない場合）
-        if (!extracted.companyName) {
-          // 香典の表書きの下にある名前を抽出
-          const namePatterns = [
-            /御霊前\s*\n\s*(\S+\s+\S+)/,
-            /御仏前\s*\n\s*(\S+\s+\S+)/,
-            /御香典\s*\n\s*(\S+\s+\S+)/,
-            /御香料\s*\n\s*(\S+\s+\S+)/,
-            /\n\s*([一-龯ひらがなカタカナ]{2,8}\s+[一-龯ひらがなカタカナ]{1,8})\s*$/m,
-            /([一-龯ひらがなカタカナ]{2,4}\s+[一-龯ひらがなカタカナ]{1,4})/
-          ];
-
-          for (const pattern of namePatterns) {
-            const match = frontText.match(pattern);
-            if (match) {
-              extracted.fullName = match[1].trim();
-              console.log('個人名抽出:', extracted.fullName);
-              break;
-            }
-          }
-        }
-      }
-
-      // 住所の抽出（裏面から）
-      if (ocrResults.back) {
-        const backText = ocrResults.back;
-        console.log('裏面テキスト:', backText);
-
-        const addressPatterns = [
-          /([一-龯ひらがなカタカナ0-9]+[都道府県][一-龯ひらがなカタカナ0-9]+[市区町村][一-龯ひらがなカタカナ0-9-]+)/,
-          /〒\s*\d{3}-\d{4}\s*([^0-9\n]+)/,
-          /([一-龯ひらがなカタカナ]{2,}[都道府県][^0-9\n]+)/
-        ];
-
-        for (const pattern of addressPatterns) {
-          const match = backText.match(pattern);
-          if (match) {
-            extracted.address = match[1].trim();
-            console.log('住所抽出:', extracted.address);
-            break;
-          }
-        }
-
-        // 裏面からの名前抽出（表面で抽出できなかった場合）
-        if (!extracted.fullName && !extracted.companyName) {
-          const backNamePatterns = [
-            /([一-龯ひらがなカタカナ]{2,4}\s+[一-龯ひらがなカタカナ]{1,4})/,
-            /氏名\s*([一-龯ひらがなカタカナ\s]+)/
-          ];
-
-          for (const pattern of backNamePatterns) {
-            const match = backText.match(pattern);
-            if (match) {
-              extracted.fullName = match[1].trim();
-              console.log('裏面から個人名抽出:', extracted.fullName);
-              break;
-            }
-          }
-        }
-      }
-
-      // 中袋裏面からの追加情報
-      if (ocrResults.innerBack) {
-        const innerBackText = ocrResults.innerBack;
-        console.log('中袋裏面テキスト:', innerBackText);
-
-        // 中袋からの名前抽出（他で抽出できなかった場合）
-        if (!extracted.fullName && !extracted.companyName) {
-          const innerNamePatterns = [
-            /([一-龯ひらがなカタカナ]{2,4}\s+[一-龯ひらがなカタカナ]{1,4})/,
-            /氏名\s*([一-龯ひらがなカタカナ\s]+)/
-          ];
-
-          for (const pattern of innerNamePatterns) {
-            const match = innerBackText.match(pattern);
-            if (match) {
-              extracted.fullName = match[1].trim();
-              console.log('中袋裏面から個人名抽出:', extracted.fullName);
-              break;
-            }
-          }
-        }
-
-        // 中袋からの住所抽出（他で抽出できなかった場合）
-        if (!extracted.address) {
-          const innerAddressPatterns = [
-            /住所\s*([^0-9\n]+)/,
-            /([一-龯ひらがなカタカナ0-9]+[都道府県][一-龯ひらがなカタカナ0-9]+[市区町村][一-龯ひらがなカタカナ0-9-]+)/
-          ];
-
-          for (const pattern of innerAddressPatterns) {
-            const match = innerBackText.match(pattern);
-            if (match) {
-              extracted.address = match[1].trim();
-              console.log('中袋裏面から住所抽出:', extracted.address);
-              break;
-            }
-          }
-        }
-      }
-
-      // デバッグ用のノート作成
-      extracted.notes = Object.entries(ocrResults)
-        .filter(([, text]) => text)
-        .map(([imageType, text]) => `【${imageTypes[imageType].label}】\n${text}`)
-        .join('\n\n');
-
-      console.log('最終抽出結果:', extracted);
-
-    } catch (error) {
-      console.error('Information extraction error:', error);
-      toast.error('情報の抽出中にエラーが発生しました');
     }
 
+    // --- 役職リスト ---
+    const positionList = [
+      '代表取締役', '取締役', '社長', '副社長', '専務', '常務', '会長', '理事', '監査役', '執行役員',
+      '支店長', '営業所長', '本部長', '部長', '次長', '課長', '係長', '主任', '相談役', '顧問',
+      '店長', 'センター長', 'マネージャー', 'リーダー', 'プロジェクトマネージャー', '室長', '主幹', '主査',
+      '統括', '総括', '委員', '代表', '副代表', '副部長', '副課長', '副主任', '副店長', '副会長',
+      '支配人', '所長', '校長', '園長', '学長', '教授', '准教授', '講師', '教諭', '教頭', '学部長',
+      '学科長', '部門長', '責任者', '担当', '係', '委員長', '幹事', '監事', '理事長', '事務局長',
+      '事務長', '事業部長', '営業部長', '総務部長', '経理部長', '人事部長', '工場長', '工事長', '現場監督',
+      'キャプテン', 'リーダー', 'ディレクター', 'プロデューサー', 'マスター', 'オーナー', 'パートナー', 'メンバー'
+    ];
+    // 役職抽出（前後の空白や記号も考慮）
+    let foundPosition = '';
+    for (const [key, text] of allTexts) {
+      for (const pos of positionList) {
+        const regex = new RegExp(`(?:^|\s|　|:|：|・|\(|（)${pos}(?:$|\s|　|:|：|・|\)|）)`, 'u');
+        if (regex.test(text)) {
+          foundPosition = pos;
+          break;
+        }
+      }
+      if (foundPosition) break;
+    }
+    extracted.position = foundPosition;
+
+    // 役職語を除去したテキスト配列を作成
+    const allTextsNoPosition = allTexts.map(([key, text]) => [key, foundPosition ? text.replace(new RegExp(foundPosition, 'g'), '') : text]);
+
+    // 会社名抽出（役職語除去済みテキスト使用・役職語が後ろに続く場合も除去）
+    const companyPatterns = [
+      /(株式|有限|合名|合資|合同)会社[\s]*([\S]+)/,
+      /([\S]+)[\s]*(株式|有限|合名|合資|合同)会社/,
+      /([\S]+)[\s]*(商会|工業|建設|組|組合|事務所|医院|病院|クリニック|店|堂|舎|社|会|部|課|室)/
+    ];
+    let foundCompany = '';
+    for (const [key, text] of allTextsNoPosition) {
+      let textForCompany = text;
+      // 会社名の後ろに役職語が続く場合（例: 株式会社 代表取締役）を除去
+      if (foundPosition) {
+        textForCompany = textForCompany.replace(new RegExp(`([\S]+)[\s　]*${foundPosition}`), '$1');
+      }
+      for (const pattern of companyPatterns) {
+        const match = textForCompany.match(pattern);
+        if (match) {
+          foundCompany = match[0];
+          break;
+        }
+      }
+      if (foundCompany) break;
+    }
+    extracted.companyName = foundCompany;
+
+    // 氏名抽出（複数パターン・全OCR面横断）
+    const namePatterns = [
+      /氏名[\s:]*([一-龯ぁ-んァ-ヶーa-zA-Z\s]{2,})/,
+      /([一-龯ぁ-んァ-ヶー]{2,8}\s+[一-龯ぁ-んァ-ヶー]{1,8})/,
+      /([一-龯ぁ-んァ-ヶー]{2,8})[\s　]+([一-龯ぁ-んァ-ヶー]{1,8})/,
+      /([一-龯ぁ-んァ-ヶー]{2,8})/g
+    ];
+    let foundName = '';
+    for (const [key, text] of allTexts) {
+      for (const pattern of namePatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          if (pattern.flags && pattern.flags.includes('g')) {
+            // 複数候補から最も長いものを選ぶ
+            foundName = match.sort((a, b) => b.length - a.length)[0];
+          } else {
+            foundName = match[1] || match[0];
+          }
+          break;
+        }
+      }
+      if (foundName) break;
+    }
+    if (!extracted.companyName) extracted.fullName = foundName;
+
+    // 住所抽出（都道府県・市区町村・番地パターン強化）
+    const addressPatterns = [
+      /([一-龯ぁ-んァ-ヶー0-9０-９\-ー\s]+[都道府県][一-龯ぁ-んァ-ヶー0-9０-９\-ー\s]+[市区町村][一-龯ぁ-んァ-ヶー0-9０-９\-ー\s]+)/,
+      /〒[\s]*[0-9０-９]{3}-[0-9０-９]{4}[\s]*([一-龯ぁ-んァ-ヶー0-9０-９\-ー\s]+)/,
+      /住所[\s:]*([一-龯ぁ-んァ-ヶー0-9０-９\-ー\s]+)/
+    ];
+    let foundAddress = '';
+    for (const [key, text] of allTexts) {
+      for (const pattern of addressPatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          foundAddress = match[1] || match[0];
+          break;
+        }
+      }
+      if (foundAddress) break;
+    }
+    extracted.address = foundAddress;
+
+    // 備考
+    extracted.notes = Object.entries(ocrResults)
+      .filter(([, text]) => text)
+      .map(([imageType, text]) => `【${imageTypes[imageType].label}】\n${cleanText(text)}`)
+      .join('\n\n');
+
+    // デバッグ
+    console.log('最終抽出結果(精度向上版):', extracted);
     return extracted;
   };
 
@@ -1201,9 +1232,25 @@ const OCRCapture = () => {
                 </div>
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   setShowImageModal(false);
-                  cameraInputRefs[selectedImageType].current?.click();
+                  // PCの場合はWebカメラ起動用のinputを生成してクリック
+                  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    // 動的にinputを生成
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.capture = 'environment';
+                    input.style.display = 'none';
+                    document.body.appendChild(input);
+                    input.onchange = (e) => handleImageSelect(selectedImageType, e);
+                    input.click();
+                    // 後片付け
+                    setTimeout(() => document.body.removeChild(input), 10000);
+                  } else {
+                    // Fallback: 既存のinputを使う
+                    cameraInputRefs[selectedImageType].current?.click();
+                  }
                 }}
                 className="w-full flex items-center justify-center space-x-3 p-4 border-2 border-green-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors"
               >
