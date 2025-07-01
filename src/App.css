@@ -1,0 +1,67 @@
+/* カスタムスタイル */
+.app-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+/* スクロールバーのスタイリング */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* プリント用スタイル */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* OCR結果表示用 */
+.ocr-result {
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.ocr-processing {
+  border-color: #007bff;
+  background: rgba(0, 123, 255, 0.1);
+}
+
+.ocr-success {
+  border-color: #28a745;
+  background: rgba(40, 167, 69, 0.1);
+}
+
+.ocr-error {
+  border-color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
