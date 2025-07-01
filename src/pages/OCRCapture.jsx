@@ -315,6 +315,7 @@ const OCRCapture = () => {
 
             if (result.success) {
               results[imageType] = result.fullText || result.text;
+              console.log(`OCR結果 ${imageType}:`, result.fullText || result.text);
             } else {
               results[imageType] = '';
               console.error(`${imageType} OCR失敗:`, result.error);
@@ -332,9 +333,13 @@ const OCRCapture = () => {
       setProcessingProgress(100);
       setOcrResults(results);
 
+      console.log('OCR結果全体:', results);
+
       // 統合情報抽出
-      const extractedData = await extractComprehensiveInfo(results);
+      const extractedData = extractComprehensiveInfo(results);
       setExtractedInfo(extractedData);
+
+      console.log('抽出された情報:', extractedData);
 
       // 香典の種類を認識
       const donationTypeResult = googleVisionService.recognizeDonationType(
@@ -343,11 +348,15 @@ const OCRCapture = () => {
       );
       setDonationTypeInfo(donationTypeResult);
 
-      setFormData({
+      // フォームデータを更新
+      const updatedFormData = {
         ...extractedData,
         donationType: donationTypeResult.type,
         donationCategory: donationTypeResult.category
-      });
+      };
+
+      console.log('フォームに設定するデータ:', updatedFormData);
+      setFormData(updatedFormData);
 
       setStep(3);
 
@@ -369,8 +378,8 @@ const OCRCapture = () => {
     }
   };
 
-  // OCR結果から情報を抽出する関数（簡略化）
-  const extractComprehensiveInfo = async (ocrResults) => {
+  // OCR結果から情報を抽出する関数（改良版）
+  const extractComprehensiveInfo = (ocrResults) => {
     const extracted = {
       lastName: '',
       firstName: '',
@@ -388,18 +397,175 @@ const OCRCapture = () => {
     try {
       // 全てのテキストを結合
       const allText = Object.values(ocrResults).join('\n');
-      
-      // 金額の抽出
-      const amountMatch = allText.match(/金\s*(\d{1,3}(?:,\d{3})*)\s*円/);
-      if (amountMatch) {
-        extracted.amount = amountMatch[1].replace(/,/g, '');
+      console.log('統合テキスト:', allText);
+
+      // 金額の抽出（複数のパターンに対応）
+      const amountPatterns = [
+        /金\s*(\d{1,3}(?:,\d{3})*)\s*円/,
+        /(\d{1,3}(?:,\d{3})*)\s*円/,
+        /金額\s*(\d{1,3}(?:,\d{3})*)/,
+        /¥\s*(\d{1,3}(?:,\d{3})*)/,
+        /金\s*(\d+)/
+      ];
+
+      for (const pattern of amountPatterns) {
+        const match = allText.match(pattern);
+        if (match) {
+          extracted.amount = match[1].replace(/,/g, '');
+          console.log('金額抽出:', extracted.amount);
+          break;
+        }
       }
 
-      // ノート作成
+      // 中袋の金額抽出（innerFrontから優先的に）
+      if (ocrResults.innerFront) {
+        for (const pattern of amountPatterns) {
+          const match = ocrResults.innerFront.match(pattern);
+          if (match) {
+            extracted.innerAmount = match[1].replace(/,/g, '');
+            if (!extracted.amount) {
+              extracted.amount = extracted.innerAmount;
+            }
+            console.log('中袋金額抽出:', extracted.innerAmount);
+            break;
+          }
+        }
+      }
+
+      // 名前の抽出（表面から）
+      if (ocrResults.front) {
+        const frontText = ocrResults.front;
+        console.log('表面テキスト:', frontText);
+
+        // 会社名のパターン
+        const companyPatterns = [
+          /株式会社\s*(\S+)/,
+          /有限会社\s*(\S+)/,
+          /(\S+)\s*株式会社/,
+          /(\S+)\s*有限会社/,
+          /(\S+)\s*会社/,
+          /(\S+)\s*商会/,
+          /(\S+)\s*工業/,
+          /(\S+)\s*建設/
+        ];
+
+        for (const pattern of companyPatterns) {
+          const match = frontText.match(pattern);
+          if (match) {
+            extracted.companyName = match[0];
+            console.log('会社名抽出:', extracted.companyName);
+            break;
+          }
+        }
+
+        // 個人名の抽出（会社名が見つからない場合）
+        if (!extracted.companyName) {
+          // 香典の表書きの下にある名前を抽出
+          const namePatterns = [
+            /御霊前\s*\n\s*(\S+\s+\S+)/,
+            /御仏前\s*\n\s*(\S+\s+\S+)/,
+            /御香典\s*\n\s*(\S+\s+\S+)/,
+            /御香料\s*\n\s*(\S+\s+\S+)/,
+            /\n\s*([一-龯ひらがなカタカナ]{2,8}\s+[一-龯ひらがなカタカナ]{1,8})\s*$/m,
+            /([一-龯ひらがなカタカナ]{2,4}\s+[一-龯ひらがなカタカナ]{1,4})/
+          ];
+
+          for (const pattern of namePatterns) {
+            const match = frontText.match(pattern);
+            if (match) {
+              extracted.fullName = match[1].trim();
+              console.log('個人名抽出:', extracted.fullName);
+              break;
+            }
+          }
+        }
+      }
+
+      // 住所の抽出（裏面から）
+      if (ocrResults.back) {
+        const backText = ocrResults.back;
+        console.log('裏面テキスト:', backText);
+
+        const addressPatterns = [
+          /([一-龯ひらがなカタカナ0-9]+[都道府県][一-龯ひらがなカタカナ0-9]+[市区町村][一-龯ひらがなカタカナ0-9\-]+)/,
+          /〒\s*\d{3}-\d{4}\s*([^0-9\n]+)/,
+          /([一-龯ひらがなカタカナ]{2,}[都道府県][^0-9\n]+)/
+        ];
+
+        for (const pattern of addressPatterns) {
+          const match = backText.match(pattern);
+          if (match) {
+            extracted.address = match[1].trim();
+            console.log('住所抽出:', extracted.address);
+            break;
+          }
+        }
+
+        // 裏面からの名前抽出（表面で抽出できなかった場合）
+        if (!extracted.fullName && !extracted.companyName) {
+          const backNamePatterns = [
+            /([一-龯ひらがなカタカナ]{2,4}\s+[一-龯ひらがなカタカナ]{1,4})/,
+            /氏名\s*([一-龯ひらがなカタカナ\s]+)/
+          ];
+
+          for (const pattern of backNamePatterns) {
+            const match = backText.match(pattern);
+            if (match) {
+              extracted.fullName = match[1].trim();
+              console.log('裏面から個人名抽出:', extracted.fullName);
+              break;
+            }
+          }
+        }
+      }
+
+      // 中袋裏面からの追加情報
+      if (ocrResults.innerBack) {
+        const innerBackText = ocrResults.innerBack;
+        console.log('中袋裏面テキスト:', innerBackText);
+
+        // 中袋からの名前抽出（他で抽出できなかった場合）
+        if (!extracted.fullName && !extracted.companyName) {
+          const innerNamePatterns = [
+            /([一-龯ひらがなカタカナ]{2,4}\s+[一-龯ひらがなカタカナ]{1,4})/,
+            /氏名\s*([一-龯ひらがなカタカナ\s]+)/
+          ];
+
+          for (const pattern of innerNamePatterns) {
+            const match = innerBackText.match(pattern);
+            if (match) {
+              extracted.fullName = match[1].trim();
+              console.log('中袋裏面から個人名抽出:', extracted.fullName);
+              break;
+            }
+          }
+        }
+
+        // 中袋からの住所抽出（他で抽出できなかった場合）
+        if (!extracted.address) {
+          const innerAddressPatterns = [
+            /住所\s*([^0-9\n]+)/,
+            /([一-龯ひらがなカタカナ0-9]+[都道府県][一-龯ひらがなカタカナ0-9]+[市区町村][一-龯ひらがなカタカナ0-9\-]+)/
+          ];
+
+          for (const pattern of innerAddressPatterns) {
+            const match = innerBackText.match(pattern);
+            if (match) {
+              extracted.address = match[1].trim();
+              console.log('中袋裏面から住所抽出:', extracted.address);
+              break;
+            }
+          }
+        }
+      }
+
+      // デバッグ用のノート作成
       extracted.notes = Object.entries(ocrResults)
         .filter(([, text]) => text)
         .map(([imageType, text]) => `【${imageTypes[imageType].label}】\n${text}`)
         .join('\n\n');
+
+      console.log('最終抽出結果:', extracted);
 
     } catch (error) {
       console.error('Information extraction error:', error);
@@ -830,6 +996,19 @@ const OCRCapture = () => {
                   )
                 ))}
               </div>
+
+              {/* 抽出情報のデバッグ表示 */}
+              {extractedInfo && (
+                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-yellow-800 mb-1">抽出された情報</h4>
+                  <div className="text-xs text-yellow-700 space-y-1">
+                    {extractedInfo.fullName && <p>名前: {extractedInfo.fullName}</p>}
+                    {extractedInfo.companyName && <p>会社: {extractedInfo.companyName}</p>}
+                    {extractedInfo.amount && <p>金額: ¥{extractedInfo.amount}</p>}
+                    {extractedInfo.address && <p>住所: {extractedInfo.address}</p>}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* フォーム入力 */}
