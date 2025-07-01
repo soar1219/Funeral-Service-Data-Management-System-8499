@@ -13,28 +13,11 @@ const { FiPrinter, FiDownload, FiFileText, FiCalendar, FiDollarSign, FiUsers } =
 const PrintReports = () => {
   const { donations, settings } = useData();
   const [reportType, setReportType] = useState('all');
-  const [dateRange, setDateRange] = useState({
-    start: '',
-    end: ''
-  });
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // 日付フィルターを無効化
   const filterDonations = () => {
-    let filtered = [...donations];
-    
-    if (dateRange.start) {
-      filtered = filtered.filter(d => 
-        new Date(d.createdAt) >= new Date(dateRange.start)
-      );
-    }
-    
-    if (dateRange.end) {
-      filtered = filtered.filter(d => 
-        new Date(d.createdAt) <= new Date(dateRange.end + 'T23:59:59')
-      );
-    }
-    
-    return filtered;
+    return [...donations];
   };
 
   // 名前を取得するヘルパー関数
@@ -197,10 +180,7 @@ const PrintReports = () => {
           <p>${settings.address || ''}</p>
           <p>${settings.phone || ''}</p>
           <p>香典記録一覧 - ${format(new Date(), 'yyyy年MM月dd日', { locale: ja })}</p>
-          ${dateRange.start || dateRange.end ? 
-            `<p>期間: ${dateRange.start || '開始日なし'} ～ ${dateRange.end || '終了日なし'}</p>` : 
-            '<p>期間: 全期間</p>'
-          }
+          <p>期間: 全期間</p>
         </div>
         
         <table>
@@ -297,31 +277,10 @@ const PrintReports = () => {
       </motion.div>
 
       {/* フィルター設定 */}
+      {/* 日付フィルターを削除し、全データ出力に変更 */}
       <div className="bg-white rounded-xl shadow-sm border border-funeral-200 p-6 mb-6">
         <h2 className="text-lg font-semibold text-funeral-800 mb-4">出力設定</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-funeral-700 mb-2">開始日</label>
-            <input
-              type="date"
-              value={dateRange.start}
-              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-              className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-funeral-700 mb-2">終了日</label>
-            <input
-              type="date"
-              value={dateRange.end}
-              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-              className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
-            />
-          </div>
-        </div>
-
-        {/* プレビュー統計 */}
+        {/* 日付入力欄を削除 */}
         <div className="mt-4 p-4 bg-funeral-50 rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
             <div>
@@ -337,12 +296,7 @@ const PrintReports = () => {
             <div>
               <SafeIcon icon={FiCalendar} className="text-2xl text-funeral-600 mx-auto mb-1" />
               <p className="text-sm text-funeral-600">期間</p>
-              <p className="text-lg font-semibold text-funeral-800">
-                {dateRange.start && dateRange.end
-                  ? `${dateRange.start} - ${dateRange.end}`
-                  : '全期間'
-                }
-              </p>
+              <p className="text-lg font-semibold text-funeral-800">全期間</p>
             </div>
           </div>
         </div>

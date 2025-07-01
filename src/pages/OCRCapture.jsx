@@ -6,6 +6,7 @@ import GoogleVisionSetup from '../components/GoogleVisionSetup';
 import { useData } from '../context/DataContext';
 import googleVisionService from '../services/googleVisionService';
 import toast from 'react-hot-toast';
+import Webcam from 'react-webcam';
 
 const {
   FiCamera,
@@ -49,7 +50,6 @@ const OCRCapture = () => {
     lastName: '',
     firstName: '',
     fullName: '',
-    relationship: '',
     address: '',
     amount: '',
     innerAmount: '',
@@ -67,6 +67,9 @@ const OCRCapture = () => {
   const [dragOverType, setDragOverType] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImageType, setSelectedImageType] = useState(null);
+  const [showWebcam, setShowWebcam] = useState(false);
+  const webcamRef = useRef(null);
+  const [webcamImageType, setWebcamImageType] = useState(null);
 
   // ファイル入力ref
   const fileInputRefs = {
@@ -380,7 +383,6 @@ const OCRCapture = () => {
       lastName: '',
       firstName: '',
       fullName: '',
-      relationship: '',
       address: '',
       amount: '',
       innerAmount: '',
@@ -453,7 +455,7 @@ const OCRCapture = () => {
       let arabic = kanjiNorm
         .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 65248))
         .replace(/[,，]/g, '');
-      if (/^[一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+$/.test(arabic)) {
+      if (/^[一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卌陌佰阡仟萬]+$/.test(arabic)) {
         return kanjiToNumber(arabic);
       }
       // 漢数字+アラビア数字混在パターンも対応
@@ -506,9 +508,13 @@ const OCRCapture = () => {
       '事務長', '事業部長', '営業部長', '総務部長', '経理部長', '人事部長', '工場長', '工事長', '現場監督',
       'キャプテン', 'リーダー', 'ディレクター', 'プロデューサー', 'マスター', 'オーナー', 'パートナー', 'メンバー'
     ];
-    // 役職抽出（前後の空白や記号も考慮）
+    // 役職抽出（中袋表面(innerFront)や金額のみの面はスキップ）
     let foundPosition = '';
     for (const [key, text] of allTexts) {
+      // 中袋表面はスキップ
+      if (key === 'innerFront') continue;
+      // 金額しか含まれない場合もスキップ
+      if (/^金[一-龯０-９0-9,，]+円?$/.test(text.replace(/\s/g, ''))) continue;
       for (const pos of positionList) {
         const regex = new RegExp(`(?:^|\s|　|:|：|・|\(|（)${pos}(?:$|\s|　|:|：|・|\)|）)`, 'u');
         if (regex.test(text)) {
@@ -548,6 +554,10 @@ const OCRCapture = () => {
     extracted.companyName = foundCompany;
 
     // 氏名抽出（複数パターン・全OCR面横断）
+    // まず表書きワードを除去
+    const ceremonialWords = ['御霊前', '御仏前', '御香典', '御香料', '御花料', '御玉串料', '御榊料', '御供物料', '御弔慰料'];
+    const allTextsNoCeremonial = allTexts.map(([key, text]) => [key, ceremonialWords.reduce((t, word) => t.replace(new RegExp(word, 'g'), ''), text).trim()]);
+
     const namePatterns = [
       /氏名[\s:]*([一-龯ぁ-んァ-ヶーa-zA-Z\s]{2,})/,
       /([一-龯ぁ-んァ-ヶー]{2,8}\s+[一-龯ぁ-んァ-ヶー]{1,8})/,
@@ -555,7 +565,7 @@ const OCRCapture = () => {
       /([一-龯ぁ-んァ-ヶー]{2,8})/g
     ];
     let foundName = '';
-    for (const [key, text] of allTexts) {
+    for (const [key, text] of allTextsNoCeremonial) {
       for (const pattern of namePatterns) {
         const match = text.match(pattern);
         if (match) {
@@ -616,7 +626,6 @@ const OCRCapture = () => {
         lastName: formData.lastName?.trim() || '',
         firstName: formData.firstName?.trim() || '',
         fullName: formData.fullName?.trim() || '',
-        relationship: formData.relationship?.trim() || '',
         address: formData.address?.trim() || '',
         donationType: formData.donationType || '',
         donationCategory: formData.donationCategory || '',
@@ -679,7 +688,6 @@ const OCRCapture = () => {
         lastName: '',
         firstName: '',
         fullName: '',
-        relationship: '',
         address: '',
         amount: '',
         innerAmount: '',
@@ -1112,18 +1120,6 @@ const OCRCapture = () => {
                       placeholder="フルネームを入力"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-funeral-700 mb-1">
-                      続柄・関係
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.relationship}
-                      onChange={(e) => setFormData(prev => ({ ...prev, relationship: e.target.value }))}
-                      className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
-                      placeholder="続柄・関係を入力"
-                    />
-                  </div>
                 </div>
 
                 {/* 金額 */}
@@ -1231,37 +1227,26 @@ const OCRCapture = () => {
                   </p>
                 </div>
               </button>
-              <button
-                onClick={async () => {
-                  setShowImageModal(false);
-                  // PCの場合はWebカメラ起動用のinputを生成してクリック
-                  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                    // 動的にinputを生成
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.capture = 'environment';
-                    input.style.display = 'none';
-                    document.body.appendChild(input);
-                    input.onchange = (e) => handleImageSelect(selectedImageType, e);
-                    input.click();
-                    // 後片付け
-                    setTimeout(() => document.body.removeChild(input), 10000);
-                  } else {
-                    // Fallback: 既存のinputを使う
-                    cameraInputRefs[selectedImageType].current?.click();
-                  }
-                }}
-                className="w-full flex items-center justify-center space-x-3 p-4 border-2 border-green-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors"
-              >
-                <SafeIcon icon={FiCamera} className="text-2xl text-green-600" />
-                <div className="text-left">
-                  <p className="font-medium text-green-800">カメラで撮影</p>
-                  <p className="text-sm text-green-600">
-                    その場で直接撮影{isMobileDevice() && ' (自動最適化)'}
-                  </p>
-                </div>
-              </button>
+              {/* カメラで撮影ボタンはモバイルのみ表示 */}
+              {isMobileDevice() && (
+                <button
+                  onClick={() => {
+                    setShowImageModal(false);
+                    setWebcamImageType(selectedImageType);
+                    getWebcamDevices();
+                    setShowWebcam(true);
+                  }}
+                  className="w-full flex items-center justify-center space-x-3 p-4 border-2 border-green-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors"
+                >
+                  <SafeIcon icon={FiCamera} className="text-2xl text-green-600" />
+                  <div className="text-left">
+                    <p className="font-medium text-green-800">カメラで撮影</p>
+                    <p className="text-sm text-green-600">
+                      その場で直接撮影 (自動最適化)
+                    </p>
+                  </div>
+                </button>
+              )}
               <button
                 onClick={() => setShowImageModal(false)}
                 className="w-full flex items-center justify-center space-x-3 p-4 border-2 border-funeral-300 rounded-lg hover:border-funeral-400 hover:bg-funeral-50 transition-colors"
@@ -1271,6 +1256,51 @@ const OCRCapture = () => {
                   <p className="font-medium text-funeral-800">キャンセル</p>
                   <p className="text-sm text-funeral-600">選択を取り消す</p>
                 </div>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Webカメラモーダル */}
+      {showWebcam && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-xl p-6 w-full max-w-md flex flex-col items-center"
+          >
+            <h3 className="text-lg font-bold text-funeral-800 mb-4 text-center">
+              {webcamImageType ? imageTypes[webcamImageType].label : 'カメラ撮影'}
+            </h3>
+            <Webcam
+              audio={false}
+              ref={webcamRef}
+              screenshotFormat="image/jpeg"
+              width={320}
+              height={240}
+              videoConstraints={{ facingMode: 'environment' }}
+              className="rounded-lg border mb-4"
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  const imageSrc = webcamRef.current.getScreenshot();
+                  if (imageSrc && webcamImageType) {
+                    setSelectedImages(prev => ({ ...prev, [webcamImageType]: imageSrc }));
+                    setOriginalFiles(prev => ({ ...prev, [webcamImageType]: null }));
+                  }
+                  setShowWebcam(false);
+                }}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              >
+                撮影して使用
+              </button>
+              <button
+                onClick={() => setShowWebcam(false)}
+                className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400"
+              >
+                キャンセル
               </button>
             </div>
           </motion.div>
