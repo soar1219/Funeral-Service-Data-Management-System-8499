@@ -10,46 +10,21 @@ import toast from 'react-hot-toast';
 const {
   FiCamera,
   FiUpload,
-  FiEdit3,
   FiSave,
   FiRotateCcw,
   FiCheckCircle,
   FiSettings,
   FiCloud,
-  FiTag,
   FiImage,
   FiPlus,
   FiX,
-  FiFolder,
-  FiFile,
-  FiLayers,
   FiAlertTriangle
 } = FiIcons;
 
 const OCRCapture = () => {
   const { addDonation, settings, currentFuneral } = useData();
   
-  // 葬儀が選択されていない場合の早期リターン
-  if (!currentFuneral) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center">
-          <SafeIcon icon={FiAlertTriangle} className="text-4xl text-yellow-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-yellow-800 mb-2">葬儀が選択されていません</h2>
-          <p className="text-yellow-700 mb-4">
-            OCR入力を開始するには、まずダッシュボードで葬儀を作成または選択してください
-          </p>
-          <a
-            href="/"
-            className="inline-block bg-yellow-600 text-white px-6 py-3 rounded-lg hover:bg-yellow-700 transition-colors"
-          >
-            ダッシュボードに戻る
-          </a>
-        </div>
-      </div>
-    );
-  }
-
+  // すべてのHooksを条件分岐の外で宣言
   const [selectedImages, setSelectedImages] = useState({
     front: null,
     back: null,
@@ -111,6 +86,27 @@ const OCRCapture = () => {
   };
 
   const batchFileInputRef = useRef(null);
+
+  // 葬儀が選択されていない場合の早期リターン
+  if (!currentFuneral) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center">
+          <SafeIcon icon={FiAlertTriangle} className="text-4xl text-yellow-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-yellow-800 mb-2">葬儀が選択されていません</h2>
+          <p className="text-yellow-700 mb-4">
+            OCR入力を開始するには、まずダッシュボードで葬儀を作成または選択してください
+          </p>
+          <a
+            href="/"
+            className="inline-block bg-yellow-600 text-white px-6 py-3 rounded-lg hover:bg-yellow-700 transition-colors"
+          >
+            ダッシュボードに戻る
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const imageTypes = {
     front: {
@@ -299,7 +295,7 @@ const OCRCapture = () => {
 
     try {
       const results = {};
-      const files = Object.entries(originalFiles).filter(([_, file]) => file !== null);
+      const files = Object.entries(originalFiles).filter(([, file]) => file !== null);
       let processedCount = 0;
 
       const progressInterval = setInterval(() => {
@@ -401,7 +397,7 @@ const OCRCapture = () => {
 
       // ノート作成
       extracted.notes = Object.entries(ocrResults)
-        .filter(([_, text]) => text)
+        .filter(([, text]) => text)
         .map(([imageType, text]) => `【${imageTypes[imageType].label}】\n${text}`)
         .join('\n\n');
 

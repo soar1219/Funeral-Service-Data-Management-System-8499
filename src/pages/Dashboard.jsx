@@ -6,6 +6,7 @@ import SafeIcon from '../common/SafeIcon';
 import { useData } from '../context/DataContext';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
+import toast from 'react-hot-toast';
 
 const {
   FiCamera,
@@ -15,7 +16,6 @@ const {
   FiDollarSign,
   FiBuilding,
   FiPlus,
-  FiEdit3,
   FiArrowRight,
   FiHome
 } = FiIcons;
@@ -283,7 +283,7 @@ const Dashboard = () => {
         >
           <h2 className="text-xl font-bold text-funeral-800 mb-4">クイックアクション</h2>
           <div className="space-y-3">
-            {quickActions.map((action, index) => (
+            {quickActions.map((action) => (
               action.disabled ? (
                 <div
                   key={action.title}
