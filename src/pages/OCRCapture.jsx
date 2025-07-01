@@ -16,7 +16,6 @@ const {
   FiSettings,
   FiCloud,
   FiImage,
-  FiPlus,
   FiX,
   FiAlertTriangle
 } = FiIcons;
@@ -65,7 +64,6 @@ const OCRCapture = () => {
   const [showSetup, setShowSetup] = useState(false);
   const [donationTypeInfo, setDonationTypeInfo] = useState(null);
   const [extractedInfo, setExtractedInfo] = useState(null);
-  const [uploadMode, setUploadMode] = useState('individual');
   const [dragOverType, setDragOverType] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImageType, setSelectedImageType] = useState(null);
@@ -84,8 +82,6 @@ const OCRCapture = () => {
     innerFront: useRef(null),
     innerBack: useRef(null)
   };
-
-  const batchFileInputRef = useRef(null);
 
   // 葬儀が選択されていない場合の早期リターン
   if (!currentFuneral) {
@@ -487,7 +483,7 @@ const OCRCapture = () => {
         console.log('裏面テキスト:', backText);
 
         const addressPatterns = [
-          /([一-龯ひらがなカタカナ0-9]+[都道府県][一-龯ひらがなカタカナ0-9]+[市区町村][一-龯ひらがなカタカナ0-9\-]+)/,
+          /([一-龯ひらがなカタカナ0-9]+[都道府県][一-龯ひらがなカタカナ0-9]+[市区町村][一-龯ひらがなカタカナ0-9-]+)/,
           /〒\s*\d{3}-\d{4}\s*([^0-9\n]+)/,
           /([一-龯ひらがなカタカナ]{2,}[都道府県][^0-9\n]+)/
         ];
@@ -545,7 +541,7 @@ const OCRCapture = () => {
         if (!extracted.address) {
           const innerAddressPatterns = [
             /住所\s*([^0-9\n]+)/,
-            /([一-龯ひらがなカタカナ0-9]+[都道府県][一-龯ひらがなカタカナ0-9]+[市区町村][一-龯ひらがなカタカナ0-9\-]+)/
+            /([一-龯ひらがなカタカナ0-9]+[都道府県][一-龯ひらがなカタカナ0-9]+[市区町村][一-龯ひらがなカタカナ0-9-]+)/
           ];
 
           for (const pattern of innerAddressPatterns) {
@@ -667,7 +663,6 @@ const OCRCapture = () => {
       setExtractedInfo(null);
       setStep(1);
       setProcessingProgress(0);
-      setUploadMode('individual');
       setIsSaving(false);
     } catch (error) {
       console.error('Reset process error:', error);

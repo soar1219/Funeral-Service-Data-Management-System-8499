@@ -51,10 +51,9 @@ export const DataProvider = ({ children }) => {
   const initializeSupabase = async () => {
     try {
       const { createClient } = await import('@supabase/supabase-js');
-      
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
+
       if (supabaseUrl && supabaseAnonKey) {
         const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
         setSupabase(supabaseClient);
@@ -132,11 +131,11 @@ export const DataProvider = ({ children }) => {
       const newFunerals = [...funerals, newFuneral];
       localStorage.setItem('funeral-list', JSON.stringify(newFunerals));
       setFunerals(newFunerals);
-      
+
       // 新しい葬儀を現在の葬儀として設定
       setCurrentFuneral(newFuneral);
       localStorage.setItem('current-funeral-id', newFuneral.id);
-      
+
       toast.success(`${funeralData.familyName}家の葬儀を作成しました`);
       return newFuneral;
     } catch (error) {
@@ -150,26 +149,53 @@ export const DataProvider = ({ children }) => {
     try {
       const newFunerals = funerals.map(funeral =>
         funeral.id === funeralId
-          ? {
-              ...funeral,
-              ...updates,
-              updatedAt: new Date().toISOString()
-            }
+          ? { ...funeral, ...updates, updatedAt: new Date().toISOString() }
           : funeral
       );
-      
+
       localStorage.setItem('funeral-list', JSON.stringify(newFunerals));
       setFunerals(newFunerals);
-      
+
       // 現在の葬儀が更新された場合
       if (currentFuneral && currentFuneral.id === funeralId) {
         setCurrentFuneral({ ...currentFuneral, ...updates, updatedAt: new Date().toISOString() });
       }
-      
+
       toast.success('葬儀情報を更新しました');
     } catch (error) {
       console.error('葬儀更新エラー:', error);
       toast.error('葬儀情報の更新に失敗しました');
+    }
+  };
+
+  const deleteFuneral = async (funeralId) => {
+    try {
+      // 関連する香典データを削除
+      localStorage.removeItem(`funeral-donations-${funeralId}`);
+
+      // 葬儀リストから削除
+      const newFunerals = funerals.filter(funeral => funeral.id !== funeralId);
+      localStorage.setItem('funeral-list', JSON.stringify(newFunerals));
+      setFunerals(newFunerals);
+
+      // 削除された葬儀が現在の葬儀だった場合
+      if (currentFuneral && currentFuneral.id === funeralId) {
+        // 他の葬儀があれば最初のものを選択、なければnull
+        const nextFuneral = newFunerals.length > 0 ? newFunerals[0] : null;
+        setCurrentFuneral(nextFuneral);
+        
+        if (nextFuneral) {
+          localStorage.setItem('current-funeral-id', nextFuneral.id);
+        } else {
+          localStorage.removeItem('current-funeral-id');
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('葬儀削除エラー:', error);
+      toast.error('葬儀の削除に失敗しました');
+      throw error;
     }
   };
 
@@ -181,15 +207,14 @@ export const DataProvider = ({ children }) => {
 
   const mergeData = (localData, cloudData) => {
     const merged = [...localData];
-    
+
     cloudData.forEach(cloudItem => {
       const existingIndex = merged.findIndex(local => local.id === cloudItem.id);
-      
       if (existingIndex >= 0) {
         const localItem = merged[existingIndex];
         const cloudModified = new Date(cloudItem.lastModified || cloudItem.updatedAt || cloudItem.createdAt);
         const localModified = new Date(localItem.lastModified || localItem.updatedAt || localItem.createdAt);
-        
+
         if (cloudModified > localModified) {
           merged[existingIndex] = { ...cloudItem, cloudSynced: true };
         }
@@ -206,7 +231,7 @@ export const DataProvider = ({ children }) => {
 
     try {
       setIsSyncing(true);
-      
+
       const { data: existingData, error: fetchError } = await supabase
         .from('donations_kd7x9m2p1q')
         .select('*')
@@ -217,7 +242,7 @@ export const DataProvider = ({ children }) => {
       const localDonations = donationsToSync || donations;
       const mergedDonations = mergeData(localDonations, existingData || []);
 
-      const newDonations = mergedDonations.filter(donation => 
+      const newDonations = mergedDonations.filter(donation =>
         !existingData?.some(existing => existing.id === donation.id)
       );
 
@@ -247,14 +272,10 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem(`funeral-donations-${currentFuneral.id}`, JSON.stringify(updatedDonations));
       setDonations(updatedDonations);
 
-      const newSettings = {
-        ...settings,
-        lastSyncTime: new Date().toISOString()
-      };
+      const newSettings = { ...settings, lastSyncTime: new Date().toISOString() };
       saveSettings(newSettings, true);
 
       toast.success(`クラウド同期完了 (${newDonations.length}件アップロード)`);
-
     } catch (error) {
       console.error('Cloud sync error:', error);
       toast.error(`クラウド同期に失敗しました: ${error.message}`);
@@ -280,21 +301,16 @@ export const DataProvider = ({ children }) => {
 
       if (cloudData && cloudData.length > 0) {
         const mergedDonations = mergeData(donations, cloudData);
-        
         localStorage.setItem(`funeral-donations-${currentFuneral.id}`, JSON.stringify(mergedDonations));
         setDonations(mergedDonations);
 
-        const newSettings = {
-          ...settings,
-          lastSyncTime: new Date().toISOString()
-        };
+        const newSettings = { ...settings, lastSyncTime: new Date().toISOString() };
         saveSettings(newSettings, true);
 
         toast.success(`クラウドから${cloudData.length}件のデータを同期しました`);
       } else {
         toast.info('クラウドに新しいデータはありません');
       }
-
     } catch (error) {
       console.error('Sync from cloud error:', error);
       toast.error(`クラウドからの同期に失敗しました: ${error.message}`);
@@ -305,7 +321,7 @@ export const DataProvider = ({ children }) => {
 
   const syncWithCloud = async () => {
     if (!supabase || !settings.syncEnabled || !currentFuneral) return;
-    
+
     try {
       await syncFromCloud();
       await syncToCloud(donations);
@@ -345,7 +361,6 @@ export const DataProvider = ({ children }) => {
       console.log('Successfully saved:', newDonations.length, 'donations for funeral:', currentFuneral.familyName);
     } catch (error) {
       console.error('データ保存エラー:', error);
-      
       if (error.name === 'QuotaExceededError') {
         toast.error('ストレージ容量が不足しています。古いデータを削除してください。');
         try {
@@ -398,19 +413,15 @@ export const DataProvider = ({ children }) => {
         return false;
       }
 
-      const newSettings = {
-        ...settings,
-        syncEnabled: true
-      };
+      const newSettings = { ...settings, syncEnabled: true };
       saveSettings(newSettings);
 
       if (currentFuneral) {
         await syncFromCloud();
       }
-      
+
       toast.success('クラウド同期が有効になりました');
       return true;
-
     } catch (error) {
       console.error('Sync enable error:', error);
       toast.error(`同期の有効化に失敗しました: ${error.message}`);
@@ -419,10 +430,7 @@ export const DataProvider = ({ children }) => {
   };
 
   const disableSync = () => {
-    const newSettings = {
-      ...settings,
-      syncEnabled: false
-    };
+    const newSettings = { ...settings, syncEnabled: false };
     saveSettings(newSettings);
     toast.info('クラウド同期を無効にしました');
   };
@@ -435,6 +443,7 @@ export const DataProvider = ({ children }) => {
 
     try {
       console.log('Adding donation:', donation);
+
       const newDonation = {
         id: Date.now() + Math.random(),
         funeralId: currentFuneral.id,
@@ -446,8 +455,8 @@ export const DataProvider = ({ children }) => {
       };
 
       const newDonations = [...donations, newDonation];
-      
       await saveData(newDonations);
+
       return newDonation;
     } catch (error) {
       console.error('香典追加エラー:', error);
@@ -468,6 +477,7 @@ export const DataProvider = ({ children }) => {
             }
           : donation
       );
+
       await saveData(newDonations);
     } catch (error) {
       console.error('香典更新エラー:', error);
@@ -522,6 +532,7 @@ export const DataProvider = ({ children }) => {
       link.download = `${currentFuneral.familyName}家_香典記録_${new Date().toISOString().split('T')[0]}.json`;
       link.click();
       URL.revokeObjectURL(url);
+
       toast.success('データをエクスポートしました');
     } catch (error) {
       console.error('エクスポートエラー:', error);
@@ -535,7 +546,7 @@ export const DataProvider = ({ children }) => {
       reader.onload = async (e) => {
         try {
           const importedData = JSON.parse(e.target.result);
-          
+
           if (importedData.funeral && importedData.donations && Array.isArray(importedData.donations)) {
             // 葬儀データも含まれている場合
             const existingFuneral = funerals.find(f => f.id === importedData.funeral.id);
@@ -545,13 +556,14 @@ export const DataProvider = ({ children }) => {
               localStorage.setItem('funeral-list', JSON.stringify(newFunerals));
               setFunerals(newFunerals);
             }
-            
+
             // 該当葬儀に切り替え
             setCurrentFuneral(importedData.funeral);
             localStorage.setItem('current-funeral-id', importedData.funeral.id);
-            
+
             // 香典データを保存
             await saveData(importedData.donations);
+
             toast.success('葬儀データと香典記録をインポートしました');
             resolve(importedData);
           } else if (Array.isArray(importedData)) {
@@ -561,6 +573,7 @@ export const DataProvider = ({ children }) => {
               reject(new Error('No funeral selected'));
               return;
             }
+
             await saveData(importedData);
             toast.success('香典記録をインポートしました');
             resolve(importedData);
@@ -611,15 +624,16 @@ export const DataProvider = ({ children }) => {
     currentFuneral,
     createFuneral,
     updateFuneral,
+    deleteFuneral,
     switchToFuneral,
-    
+
     // 香典関連
     donations,
     addDonation,
     updateDonation,
     deleteDonation,
     searchDonations,
-    
+
     // 設定・同期
     settings,
     isLoading,

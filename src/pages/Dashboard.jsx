@@ -17,7 +17,10 @@ const {
   FiBuilding,
   FiPlus,
   FiArrowRight,
-  FiHome
+  FiHome,
+  FiEdit3,
+  FiTrash2,
+  FiMoreVertical
 } = FiIcons;
 
 const Dashboard = () => {
@@ -27,6 +30,8 @@ const Dashboard = () => {
     donations, 
     settings, 
     createFuneral, 
+    updateFuneral,
+    deleteFuneral,
     switchToFuneral 
   } = useData();
   
@@ -36,8 +41,22 @@ const Dashboard = () => {
     personalCount: 0,
     corporateCount: 0
   });
+  
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingFuneral, setEditingFuneral] = useState(null);
+  const [showDropdown, setShowDropdown] = useState(null);
+  
   const [newFuneralForm, setNewFuneralForm] = useState({
+    familyName: '',
+    deceasedName: '',
+    relationship: '',
+    funeralDate: '',
+    venue: '',
+    notes: ''
+  });
+
+  const [editFuneralForm, setEditFuneralForm] = useState({
     familyName: '',
     deceasedName: '',
     relationship: '',
@@ -82,6 +101,54 @@ const Dashboard = () => {
       });
     } catch (error) {
       console.error('葬儀作成エラー:', error);
+    }
+  };
+
+  const handleEditFuneral = (funeral) => {
+    setEditingFuneral(funeral);
+    setEditFuneralForm({
+      familyName: funeral.familyName || '',
+      deceasedName: funeral.deceasedName || '',
+      relationship: funeral.relationship || '',
+      funeralDate: funeral.funeralDate || '',
+      venue: funeral.venue || '',
+      notes: funeral.notes || ''
+    });
+    setShowEditModal(true);
+    setShowDropdown(null);
+  };
+
+  const handleUpdateFuneral = async () => {
+    if (!editFuneralForm.familyName.trim()) {
+      toast.error('家名を入力してください');
+      return;
+    }
+
+    try {
+      await updateFuneral(editingFuneral.id, editFuneralForm);
+      setShowEditModal(false);
+      setEditingFuneral(null);
+      toast.success('葬儀情報を更新しました');
+    } catch (error) {
+      console.error('葬儀更新エラー:', error);
+      toast.error('葬儀情報の更新に失敗しました');
+    }
+  };
+
+  const handleDeleteFuneral = (funeral) => {
+    const confirmMessage = `${funeral.familyName}家の葬儀を削除しますか？\n\n注意: この操作により、関連する香典記録もすべて削除されます。\nこの操作は取り消せません。`;
+    
+    if (window.confirm(confirmMessage)) {
+      if (window.confirm('本当に削除しますか？この操作は取り消せません。')) {
+        try {
+          deleteFuneral(funeral.id);
+          setShowDropdown(null);
+          toast.success(`${funeral.familyName}家の葬儀を削除しました`);
+        } catch (error) {
+          console.error('葬儀削除エラー:', error);
+          toast.error('葬儀の削除に失敗しました');
+        }
+      }
     }
   };
 
@@ -403,15 +470,18 @@ const Dashboard = () => {
             {funerals.map((funeral) => (
               <div
                 key={funeral.id}
-                onClick={() => switchToFuneral(funeral)}
-                className={`p-4 rounded-lg border transition-all cursor-pointer ${
+                className={`p-4 rounded-lg border transition-all relative ${
                   currentFuneral?.id === funeral.id
                     ? 'border-funeral-500 bg-funeral-50'
                     : 'border-funeral-200 hover:border-funeral-300 hover:bg-funeral-50'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div>
+                {/* メインクリックエリア */}
+                <div
+                  onClick={() => switchToFuneral(funeral)}
+                  className="cursor-pointer flex items-center justify-between"
+                >
+                  <div className="flex-1">
                     <h3 className="font-semibold text-funeral-800">{funeral.familyName}家</h3>
                     {funeral.deceasedName && (
                       <p className="text-sm text-funeral-600">故 {funeral.deceasedName} 様</p>
@@ -421,8 +491,53 @@ const Dashboard = () => {
                         {format(new Date(funeral.funeralDate), 'MM/dd', { locale: ja })}
                       </p>
                     )}
+                    {funeral.venue && (
+                      <p className="text-xs text-funeral-500">{funeral.venue}</p>
+                    )}
                   </div>
                   <SafeIcon icon={FiArrowRight} className="text-funeral-400" />
+                </div>
+
+                {/* アクションメニュー */}
+                <div className="absolute top-2 right-2">
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDropdown(showDropdown === funeral.id ? null : funeral.id);
+                      }}
+                      className="p-1 text-funeral-400 hover:text-funeral-600 hover:bg-funeral-100 rounded transition-colors"
+                    >
+                      <SafeIcon icon={FiMoreVertical} className="text-sm" />
+                    </button>
+
+                    {showDropdown === funeral.id && (
+                      <div className="absolute top-full right-0 mt-1 bg-white border border-funeral-200 rounded-lg shadow-lg z-10 min-w-32">
+                        <div className="py-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditFuneral(funeral);
+                            }}
+                            className="flex items-center space-x-2 w-full px-3 py-2 text-sm text-funeral-700 hover:bg-funeral-50 transition-colors"
+                          >
+                            <SafeIcon icon={FiEdit3} className="text-xs" />
+                            <span>編集</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFuneral(funeral);
+                            }}
+                            className="flex items-center space-x-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <SafeIcon icon={FiTrash2} className="text-xs" />
+                            <span>削除</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -504,6 +619,107 @@ const Dashboard = () => {
             </div>
           </motion.div>
         </div>
+      )}
+
+      {/* 葬儀編集モーダル */}
+      {showEditModal && editingFuneral && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+          >
+            <h3 className="text-lg font-bold text-funeral-800 mb-4">
+              {editingFuneral.familyName}家の葬儀情報編集
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-funeral-700 mb-1">
+                  家名 *
+                </label>
+                <input
+                  type="text"
+                  value={editFuneralForm.familyName}
+                  onChange={(e) => setEditFuneralForm({ ...editFuneralForm, familyName: e.target.value })}
+                  className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
+                  placeholder="田中"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-funeral-700 mb-1">
+                  故人名
+                </label>
+                <input
+                  type="text"
+                  value={editFuneralForm.deceasedName}
+                  onChange={(e) => setEditFuneralForm({ ...editFuneralForm, deceasedName: e.target.value })}
+                  className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
+                  placeholder="田中太郎"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-funeral-700 mb-1">
+                  葬儀日
+                </label>
+                <input
+                  type="date"
+                  value={editFuneralForm.funeralDate}
+                  onChange={(e) => setEditFuneralForm({ ...editFuneralForm, funeralDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-funeral-700 mb-1">
+                  会場
+                </label>
+                <input
+                  type="text"
+                  value={editFuneralForm.venue}
+                  onChange={(e) => setEditFuneralForm({ ...editFuneralForm, venue: e.target.value })}
+                  className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
+                  placeholder="○○会館"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-funeral-700 mb-1">
+                  備考
+                </label>
+                <textarea
+                  value={editFuneralForm.notes}
+                  onChange={(e) => setEditFuneralForm({ ...editFuneralForm, notes: e.target.value })}
+                  rows="3"
+                  className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
+                  placeholder="備考を入力"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingFuneral(null);
+                }}
+                className="px-4 py-2 text-funeral-600 border border-funeral-300 rounded-lg hover:bg-funeral-50 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleUpdateFuneral}
+                className="px-4 py-2 bg-funeral-600 text-white rounded-lg hover:bg-funeral-700 transition-colors"
+              >
+                更新
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ドロップダウン外クリック用背景 */}
+      {showDropdown && (
+        <div
+          className="fixed inset-0 z-0"
+          onClick={() => setShowDropdown(null)}
+        />
       )}
     </div>
   );
