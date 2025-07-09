@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 const { FiSettings, FiSave, FiTrash2, FiDownload, FiUpload, FiRefreshCw } = FiIcons;
 
 const Settings = () => {
-  const { settings, saveSettings, donations, exportData, importData, loadData } = useData();
+  const { settings, saveSettings, donations, exportData, importData, loadData, currentFuneral } = useData();
   const [formData, setFormData] = useState({
     funeralHomeName: settings.funeralHomeName || '',
     address: settings.address || '',
@@ -253,17 +253,31 @@ const Settings = () => {
               className="space-y-4"
             >
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <h3 className="font-semibold text-red-800 mb-2">全データ削除</h3>
-                <p className="text-sm text-red-700 mb-3">
-                  すべての香典記録を削除します。この操作は取り消せません。
-                </p>
-                <button
-                  onClick={handleClearAllData}
-                  className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  <SafeIcon icon={FiTrash2} />
-                  <span>全データ削除</span>
-                </button>
+                <h3 className="font-semibold text-red-800 mb-2">現在の葬儀データ削除</h3>
+                {currentFuneral ? (
+                  <>
+                    <p className="text-sm text-red-700 mb-2">
+                      「{currentFuneral.familyName || '(家名未登録)'}家{currentFuneral.deceasedName ? `（故 ${currentFuneral.deceasedName} 様）` : ''}」の香典記録をすべて削除します。この操作は取り消せません。
+                    </p>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('本当にこの葬儀の全データを削除しますか？この操作は取り消せません。')) {
+                          const allDonations = JSON.parse(localStorage.getItem('funeral-donations') || '[]');
+                          const filtered = allDonations.filter(d => d.funeralId !== currentFuneral.id);
+                          localStorage.setItem('funeral-donations', JSON.stringify(filtered));
+                          loadData();
+                          toast.success('現在の葬儀データを削除しました');
+                        }
+                      }}
+                      className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <SafeIcon icon={FiTrash2} />
+                      <span>現在の葬儀データ削除</span>
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-sm text-red-700">現在の葬儀が選択されていません。</p>
+                )}
               </div>
 
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
