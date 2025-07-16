@@ -86,6 +86,13 @@ const OCRCapture = () => {
     innerBack: useRef(null)
   };
 
+  // --- Webカメラデバイス取得 ---
+  const getWebcamDevices = async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter(device => device.kind === 'videoinput');
+  };
+
   // 葬儀が選択されていない場合の早期リターン
   if (!currentFuneral) {
     return (
@@ -396,7 +403,7 @@ const OCRCapture = () => {
     const cleanText = (text) => {
       if (!text) return '';
       return text
-        .replace(/[\s　]+/g, ' ')
+        .replace(/[\s ]+/g, ' ')
         .replace(/[|｜¦]/g, '')
         .replace(/[‐―－ーｰ]/g, '-')
         .replace(/[“”"'‘’]/g, '')
@@ -516,7 +523,7 @@ const OCRCapture = () => {
       // 金額しか含まれない場合もスキップ
       if (/^金[一-龯０-９0-9,，]+円?$/.test(text.replace(/\s/g, ''))) continue;
       for (const pos of positionList) {
-        const regex = new RegExp(`(?:^|\s|　|:|：|・|\(|（)${pos}(?:$|\s|　|:|：|・|\)|）)`, 'u');
+        const regex = new RegExp(`(?:^|\\s| |:|：|・|\\(|（)${pos}(?:$|\\s| |:|：|・|\\)|）)`, 'u');
         if (regex.test(text)) {
           foundPosition = pos;
           break;
@@ -540,7 +547,7 @@ const OCRCapture = () => {
       let textForCompany = text;
       // 会社名の後ろに役職語が続く場合（例: 株式会社 代表取締役）を除去
       if (foundPosition) {
-        textForCompany = textForCompany.replace(new RegExp(`([\S]+)[\s　]*${foundPosition}`), '$1');
+        textForCompany = textForCompany.replace(new RegExp(`([\S]+)[\s ]*${foundPosition}`), '$1');
       }
       for (const pattern of companyPatterns) {
         const match = textForCompany.match(pattern);
@@ -561,7 +568,7 @@ const OCRCapture = () => {
     const namePatterns = [
       /氏名[\s:]*([一-龯ぁ-んァ-ヶーa-zA-Z\s]{2,})/,
       /([一-龯ぁ-んァ-ヶー]{2,8}\s+[一-龯ぁ-んァ-ヶー]{1,8})/,
-      /([一-龯ぁ-んァ-ヶー]{2,8})[\s　]+([一-龯ぁ-んァ-ヶー]{1,8})/,
+      /([一-龯ぁ-んァ-ヶー]{2,8})[\s ]+([一-龯ぁ-んァ-ヶー]{1,8})/,
       /([一-龯ぁ-んァ-ヶー]{2,8})/g
     ];
     let foundName = '';
