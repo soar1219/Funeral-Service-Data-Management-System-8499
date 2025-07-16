@@ -214,9 +214,6 @@ const Dashboard = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-funeral-800 mb-2">ダッシュボード</h1>
-            <p className="text-funeral-600">
-              {settings.funeralHomeName} - {format(new Date(), 'yyyy年MM月dd日', { locale: ja })}
-            </p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -242,15 +239,13 @@ const Dashboard = () => {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-funeral-800">
-                  {currentFuneral.familyName}家
+                  {(currentFuneral.familyName && currentFuneral.familyName.trim()) ? `${currentFuneral.familyName}家` : '家名未設定'}
                 </h2>
                 {currentFuneral.deceasedName && (
                   <p className="text-funeral-600">故 {currentFuneral.deceasedName} 様</p>
                 )}
-                {currentFuneral.funeralDate && (
-                  <p className="text-sm text-funeral-500">
-                    {format(new Date(currentFuneral.funeralDate), 'yyyy年MM月dd日', { locale: ja })}
-                  </p>
+                {currentFuneral.venue && (
+                  <p className="text-sm text-funeral-500">{currentFuneral.venue}</p>
                 )}
               </div>
             </div>
@@ -482,15 +477,15 @@ const Dashboard = () => {
                   className="cursor-pointer flex items-center justify-between"
                 >
                   <div className="flex-1">
-                    <h3 className="font-semibold text-funeral-800">{funeral.familyName}家</h3>
+                    <h3 className="font-semibold text-funeral-800">{(funeral.familyName && funeral.familyName.trim()) ? `${funeral.familyName}家` : '家名未設定'}</h3>
                     {funeral.deceasedName && (
                       <p className="text-sm text-funeral-600">故 {funeral.deceasedName} 様</p>
                     )}
-                    {funeral.funeralDate && (
+                    {funeral.funeralDate ? (
                       <p className="text-xs text-funeral-500">
                         {format(new Date(funeral.funeralDate), 'MM/dd', { locale: ja })}
                       </p>
-                    )}
+                    ) : null}
                     {funeral.venue && (
                       <p className="text-xs text-funeral-500">{funeral.venue}</p>
                     )}
