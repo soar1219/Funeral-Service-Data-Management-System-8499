@@ -758,25 +758,6 @@ const OCRCapture = () => {
             <span>API設定</span>
           </button>
         </div>
-
-        {/* API状態表示 */}
-        <div className={`mt-4 p-3 rounded-lg border ${
-          googleVisionService.hasValidApiKey() 
-            ? 'bg-green-50 border-green-200 text-green-700' 
-            : 'bg-yellow-50 border-yellow-200 text-yellow-700'
-        }`}>
-          <div className="flex items-center">
-            <SafeIcon 
-              icon={googleVisionService.hasValidApiKey() ? FiCheckCircle : FiSettings} 
-              className="mr-2" 
-            />
-            <span className="text-sm font-medium">
-              {googleVisionService.hasValidApiKey() 
-                ? 'Google Cloud Vision API 設定済み - モバイル最適化対応' 
-                : 'Google Cloud Vision API の設定が必要です'}
-            </span>
-          </div>
-        </div>
       </motion.div>
 
       {/* プロセス表示 */}

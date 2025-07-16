@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
-import SyncManager from '../components/SyncManager';
 import { useData } from '../context/DataContext';
 import toast from 'react-hot-toast';
+import GoogleVisionSetup from '../components/GoogleVisionSetup';
 
-const { FiSettings, FiSave, FiTrash2, FiDownload, FiUpload, FiRefreshCw } = FiIcons;
+const { FiSettings, FiSave, FiTrash2, FiDownload, FiUpload, FiRefreshCw, FiCloud, FiX } = FiIcons;
 
 const Settings = () => {
   const { settings, saveSettings, donations, exportData, importData, loadData, currentFuneral } = useData();
@@ -18,6 +18,10 @@ const Settings = () => {
     ocrLanguage: settings.ocrLanguage || 'jpn'
   });
   const [showDangerZone, setShowDangerZone] = useState(false);
+  const [showApiSettings, setShowApiSettings] = useState(false);
+
+  const openApiSettings = () => setShowApiSettings(true);
+  const closeApiSettings = () => setShowApiSettings(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -70,18 +74,29 @@ const Settings = () => {
       >
         <h1 className="text-3xl font-bold text-funeral-800 mb-2">設定</h1>
         <p className="text-funeral-600">システムの設定を管理します</p>
+        <button
+          onClick={openApiSettings}
+          className="flex items-center space-x-2 px-4 py-2 text-funeral-600 border border-funeral-300 rounded-lg hover:bg-funeral-50 transition-colors mt-4"
+        >
+          <SafeIcon icon={FiCloud} />
+          <span>API設定</span>
+        </button>
       </motion.div>
+      {showApiSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full relative">
+            <button
+              onClick={closeApiSettings}
+              className="absolute top-2 right-2 text-funeral-400 hover:text-funeral-700"
+            >
+              <SafeIcon icon={FiX} />
+            </button>
+            <GoogleVisionSetup />
+          </div>
+        </div>
+      )}
 
       <div className="space-y-6">
-        {/* デバイス間同期設定 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <SyncManager />
-        </motion.div>
-
         {/* 基本設定 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
