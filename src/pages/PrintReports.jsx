@@ -15,9 +15,26 @@ const PrintReports = () => {
   const [reportType, setReportType] = useState('all');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // 日付フィルターを無効化
+  // 期間フィルター state
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // 期間で絞り込む
   const filterDonations = () => {
-    return [...donations];
+    let data = [...donations];
+    if (startDate) {
+      data = data.filter(d => {
+        const date = new Date(d.createdAt || d.createdat || d.created_at);
+        return !isNaN(date) && date >= new Date(startDate);
+      });
+    }
+    if (endDate) {
+      data = data.filter(d => {
+        const date = new Date(d.createdAt || d.createdat || d.created_at);
+        return !isNaN(date) && date <= new Date(endDate + 'T23:59:59');
+      });
+    }
+    return data;
   };
 
   // 名前を取得するヘルパー関数
@@ -120,7 +137,6 @@ const PrintReports = () => {
 
   const generateCSV = () => {
     const filteredData = filterDonations();
-    
     const csvContent = [
       ['Company Name', 'Full Name', 'Position', 'Relationship', 'Address', 'Amount', 'Inner Amount', 'Donation Type', 'Co-Names', 'Notes', 'Created Date'].join(','),
       ...filteredData.map(d => [
@@ -131,135 +147,138 @@ const PrintReports = () => {
         `"${d.address || ''}"`,
         d.amount || 0,
         d.innerAmount || 0,
-        `"${d.donationType || ''}"`,
-        `"${d.coNames ? d.coNames.join(', ') : ''}"`,
+        `"${d.donationType || d.donationtype || ''}"`,
+        `"${Array.isArray(d.coNames) ? d.coNames.join(', ') : ''}"`,
         `"${d.notes || ''}"`,
-        format(new Date(d.createdAt), 'yyyy-MM-dd HH:mm')
+        d.createdAt || d.createdat || d.created_at ? format(new Date(d.createdAt || d.createdat || d.created_at), 'yyyy-MM-dd HH:mm') : ''
       ].join(','))
     ].join('\n');
-    
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    link.href = url;
     link.download = `koden_data_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const printPreview = () => {
     const filteredData = filterDonations();
-    const printWindow = window.open('', '_blank');
-    
+    const now = new Date();
+    const formatDate = (date, fmt) => {
+      try {
+        return format(new Date(date), fmt, { locale: ja });
+      } catch {
+        return '';
+      }
+    };
+    // robust field getter
+    const getField = (d, keys, fallback = '-') => {
+      for (const k of keys) {
+        if (d[k] !== undefined && d[k] !== null && d[k] !== '') return d[k];
+      }
+      return fallback;
+    };
     const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>香典記録一覧</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .header h1 { margin: 0; }
-          .header p { margin: 5px 0; color: #666; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
-          th { background-color: #f5f5f5; font-weight: bold; }
-          .total { margin-top: 20px; text-align: right; font-weight: bold; }
-          .company-name { color: #0066cc; font-weight: bold; }
-          .person-name { color: #333; }
-          .co-names { color: #666; font-size: 11px; }
-          .empty-cell { color: #999; }
-          @media print {
-            body { margin: 0; }
-            .no-print { display: none; }
-            th, td { font-size: 10px; padding: 4px; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>${settings.funeralHomeName || '葬儀場'}</h1>
-          <p>${settings.address || ''}</p>
-          <p>${settings.phone || ''}</p>
-          <p>香典記録一覧 - ${format(new Date(), 'yyyy年MM月dd日', { locale: ja })}</p>
-          <p>期間: 全期間</p>
-        </div>
-        
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 20%;">会社名</th>
-              <th style="width: 15%;">氏名</th>
-              <th style="width: 12%;">役職・続柄</th>
-              <th style="width: 23%;">住所</th>
-              <th style="width: 10%;">香典種類</th>
-              <th style="width: 12%;">金額</th>
-              <th style="width: 8%;">日付</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${filteredData.map(d => {
-              const coNamesText = d.coNames && d.coNames.length > 0 ? 
-                `<br><span class="co-names">連名: ${d.coNames.join(', ')}</span>` : '';
-              
-              return `
-                <tr>
-                  <td>
-                    ${d.companyName ? 
-                      `<span class="company-name">${d.companyName}</span>` : 
-                      '<span class="empty-cell">-</span>'
-                    }
-                  </td>
-                  <td>
-                    ${d.fullName || d.name ? 
-                      `<span class="person-name">${d.fullName || d.name}</span>${coNamesText}` : 
-                      '<span class="empty-cell">-</span>'
-                    }
-                  </td>
-                  <td>
-                    ${d.position || d.relationship ? 
-                      `${d.position || d.relationship}` : 
-                      '<span class="empty-cell">-</span>'
-                    }
-                  </td>
-                  <td>
-                    ${d.address ? 
-                      `${d.address}` : 
-                      '<span class="empty-cell">-</span>'
-                    }
-                  </td>
-                  <td>
-                    ${d.donationType ? 
-                      `${d.donationType}` : 
-                      '<span class="empty-cell">-</span>'
-                    }
-                  </td>
-                  <td style="text-align: right;">
-                    ¥${(d.amount || 0).toLocaleString()}
-                    ${d.innerAmount && d.innerAmount !== d.amount ? 
-                      `<br><small>(中袋: ¥${d.innerAmount.toLocaleString()})</small>` : ''
-                    }
-                  </td>
-                  <td>${format(new Date(d.createdAt), 'MM/dd', { locale: ja })}</td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
-        
-        <div class="total">
-          <p>総件数: ${filteredData.length}件</p>
-          <p>合計金額: ¥${filteredData.reduce((sum, d) => sum + (d.amount || 0), 0).toLocaleString()}</p>
-        </div>
-        
-        <div class="no-print" style="margin-top: 30px; text-align: center;">
-          <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">印刷</button>
-          <button onclick="window.close()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">閉じる</button>
-        </div>
-      </body>
-      </html>
+      <!DOCTYPE html><html><head><title>印刷プレビュー</title><meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { margin: 0; }
+        .header p { margin: 5px 0; color: #666; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+        th { background-color: #f5f5f5; font-weight: bold; }
+        .total { margin-top: 20px; text-align: right; font-weight: bold; }
+        .company-name { color: #0066cc; font-weight: bold; }
+        .person-name { color: #333; }
+        .co-names { color: #666; font-size: 11px; }
+        .empty-cell { color: #999; }
+        @media print {
+          body { margin: 0; }
+          .no-print { display: none; }
+          th, td { font-size: 10px; padding: 4px; }
+        }
+      </style>
+      </head><body>
+      <div class="header">
+        <h1>${settings.funeralHomeName || '葬儀場'}</h1>
+        <p>${settings.address || ''}</p>
+        <p>${settings.phone || ''}</p>
+        <p>香典記録一覧 - ${formatDate(now, 'yyyy年MM月dd日')}</p>
+        <p>期間: 全期間</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 20%;">会社名</th>
+            <th style="width: 15%;">氏名</th>
+            <th style="width: 12%;">役職・続柄</th>
+            <th style="width: 23%;">住所</th>
+            <th style="width: 10%;">香典種類</th>
+            <th style="width: 12%;">金額</th>
+            <th style="width: 8%;">日付</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredData.map(d => {
+            const company = getField(d, ['companyName', 'company_name', 'companyname']);
+            const fullName = getField(d, ['fullName', 'fullname', 'name']);
+            const coNamesArr = d.coNames || d.conames || d.co_names;
+            const coNamesText = Array.isArray(coNamesArr) && coNamesArr.length > 0 ? `<br><span class=\"co-names\">連名: ${coNamesArr.join(', ')}</span>` : '';
+            const position = getField(d, ['position', 'relationship', 'relation']);
+            const address = getField(d, ['address', 'addr']);
+            const donationType = getField(d, ['donationType', 'donationtype', 'donation_type']);
+            const amount = Number(getField(d, ['amount', 'money', 'price'], 0));
+            const innerAmount = Number(getField(d, ['innerAmount', 'inner_amount'], 0));
+            const createdAt = getField(d, ['createdAt', 'createdat', 'created_at']);
+            return `
+              <tr>
+                <td>
+                  ${company !== '-' ? `<span class=\"company-name\">${company}</span>` : '<span class=\"empty-cell\">-</span>'}
+                </td>
+                <td>
+                  ${fullName !== '-' ? `<span class=\"person-name\">${fullName}</span>${coNamesText}` : '<span class=\"empty-cell\">-</span>'}
+                </td>
+                <td>
+                  ${position !== '-' ? position : '<span class=\"empty-cell\">-</span>'}
+                </td>
+                <td>
+                  ${address !== '-' ? address : '<span class=\"empty-cell\">-</span>'}
+                </td>
+                <td>
+                  ${donationType !== '-' ? donationType : '<span class=\"empty-cell\">-</span>'}
+                </td>
+                <td style=\"text-align: right;\">
+                  ¥${amount.toLocaleString()}
+                  ${innerAmount && innerAmount !== amount ? `<br><small>(中袋: ¥${innerAmount.toLocaleString()})</small>` : ''}
+                </td>
+                <td>${createdAt ? formatDate(createdAt, 'MM/dd') : ''}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+      <div class="total">
+        <p>総件数: ${filteredData.length}件</p>
+        <p>合計金額: ¥${filteredData.reduce((sum, d) => sum + (Number(d.amount) || 0), 0).toLocaleString()}</p>
+      </div>
+      <div class="no-print" style="margin-top: 30px; text-align: center;">
+        <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">印刷</button>
+        <button onclick="window.close()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">閉じる</button>
+      </div>
+      </body></html>
     `;
-    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('ポップアップブロックを解除してください');
+      return;
+    }
     printWindow.document.write(htmlContent);
     printWindow.document.close();
+    printWindow.focus();
   };
 
   const filteredData = filterDonations();
@@ -277,10 +296,38 @@ const PrintReports = () => {
       </motion.div>
 
       {/* フィルター設定 */}
-      {/* 日付フィルターを削除し、全データ出力に変更 */}
       <div className="bg-white rounded-xl shadow-sm border border-funeral-200 p-6 mb-6">
         <h2 className="text-lg font-semibold text-funeral-800 mb-4">出力設定</h2>
-        {/* 日付入力欄を削除 */}
+        {/* 期間フィルター追加 */}
+        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-funeral-700">開始日</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
+              max={endDate || undefined}
+            />
+          </div>
+          <span className="text-funeral-500">〜</span>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-funeral-700">終了日</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
+              min={startDate || undefined}
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => { setStartDate(''); setEndDate(''); }}
+              className="ml-2 px-3 py-2 text-funeral-600 border border-funeral-300 rounded-lg hover:bg-funeral-50 transition-colors"
+            >リセット</button>
+          )}
+        </div>
         <div className="mt-4 p-4 bg-funeral-50 rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
             <div>
@@ -296,14 +343,18 @@ const PrintReports = () => {
             <div>
               <SafeIcon icon={FiCalendar} className="text-2xl text-funeral-600 mx-auto mb-1" />
               <p className="text-sm text-funeral-600">期間</p>
-              <p className="text-lg font-semibold text-funeral-800">全期間</p>
+              <p className="text-lg font-semibold text-funeral-800">
+                {startDate || endDate
+                  ? `${startDate ? startDate.replace(/-/g, '/'): ''}〜${endDate ? endDate.replace(/-/g, '/') : ''}`
+                  : '全期間'}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
       {/* 出力オプション */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* 印刷プレビュー */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -329,61 +380,11 @@ const PrintReports = () => {
           </div>
         </motion.div>
 
-        {/* PDF詳細レポート */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl shadow-sm border border-funeral-200 p-6"
-        >
-          <div className="text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <SafeIcon icon={FiFileText} className="text-2xl text-red-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-funeral-800 mb-2">PDF詳細レポート</h3>
-            <p className="text-sm text-funeral-600 mb-4">
-              全データを含む詳細なPDFレポートを生成します
-            </p>
-            <button
-              onClick={() => generatePDF('detail')}
-              disabled={filteredData.length === 0 || isGenerating}
-              className="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGenerating ? '生成中...' : 'PDF生成'}
-            </button>
-          </div>
-        </motion.div>
-
-        {/* PDFサマリーレポート */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-xl shadow-sm border border-funeral-200 p-6"
-        >
-          <div className="text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <SafeIcon icon={FiFileText} className="text-2xl text-green-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-funeral-800 mb-2">PDFサマリー</h3>
-            <p className="text-sm text-funeral-600 mb-4">
-              統計情報を含むサマリーレポートを生成します
-            </p>
-            <button
-              onClick={() => generatePDF('summary')}
-              disabled={filteredData.length === 0 || isGenerating}
-              className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGenerating ? '生成中...' : 'PDF生成'}
-            </button>
-          </div>
-        </motion.div>
-
         {/* CSVエクスポート */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.2 }}
           className="bg-white rounded-xl shadow-sm border border-funeral-200 p-6"
         >
           <div className="text-center">

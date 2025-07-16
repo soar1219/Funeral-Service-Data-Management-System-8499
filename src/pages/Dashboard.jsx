@@ -304,38 +304,6 @@ const Dashboard = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-        {/* 個人・法人別統計 */}
-        {currentFuneral && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white rounded-xl shadow-sm border border-funeral-200 p-6"
-          >
-            <h2 className="text-xl font-bold text-funeral-800 mb-4">個人・法人別統計</h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <SafeIcon icon={FiUsers} className="text-blue-600 text-xl" />
-                  <div>
-                    <p className="font-semibold text-funeral-800">個人</p>
-                    <p className="text-sm text-funeral-600">{stats.personalCount}件</p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <SafeIcon icon={FiBuilding} className="text-green-600 text-xl" />
-                  <div>
-                    <p className="font-semibold text-funeral-800">法人</p>
-                    <p className="text-sm text-funeral-600">{stats.corporateCount}件</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
         {/* クイックアクション */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
@@ -405,12 +373,21 @@ const Dashboard = () => {
                 >
                   <div>
                     <div className="flex items-center space-x-2">
-                      {donation.companyName && (
-                        <SafeIcon icon={FiBuilding} className="text-funeral-400 text-sm" />
+                      {donation.companyName || donation.companyname ? (
+                        <>
+                          <SafeIcon icon={FiBuilding} className="text-funeral-400 text-sm" />
+                          <p className="font-medium text-funeral-800">
+                            {donation.companyName || donation.companyname}
+                          </p>
+                          {(donation.fullName || donation.fullname || donation.name) && (
+                            <span className="ml-2 text-sm text-funeral-600">{donation.fullName || donation.fullname || donation.name}</span>
+                          )}
+                        </>
+                      ) : (
+                        <p className="font-medium text-funeral-800">
+                          {donation.fullName || donation.fullname || donation.name || '-'}
+                        </p>
                       )}
-                      <p className="font-medium text-funeral-800">
-                        {donation.companyName || donation.fullName || donation.name}
-                      </p>
                     </div>
                     <p className="text-sm text-funeral-600">
                       {donation.position || donation.relationship}
@@ -427,7 +404,16 @@ const Dashboard = () => {
                       ¥{donation.amount?.toLocaleString()}
                     </p>
                     <p className="text-xs text-funeral-500">
-                      {format(new Date(donation.createdAt), 'MM/dd HH:mm')}
+                      {(() => {
+                        if (!donation.createdAt) return '-';
+                        const date = new Date(donation.createdAt);
+                        if (isNaN(date.getTime())) return '-';
+                        try {
+                          return format(date, 'MM/dd HH:mm');
+                        } catch {
+                          return '-';
+                        }
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -481,11 +467,22 @@ const Dashboard = () => {
                     {funeral.deceasedName && (
                       <p className="text-sm text-funeral-600">故 {funeral.deceasedName} 様</p>
                     )}
-                    {funeral.funeralDate ? (
-                      <p className="text-xs text-funeral-500">
-                        {format(new Date(funeral.funeralDate), 'MM/dd', { locale: ja })}
-                      </p>
-                    ) : null}
+                    {(() => {
+                      if (!funeral.funeralDate) return null;
+                      const date = new Date(funeral.funeralDate);
+                      if (isNaN(date.getTime())) {
+                        return <p className="text-xs text-funeral-500">-</p>;
+                      }
+                      try {
+                        return (
+                          <p className="text-xs text-funeral-500">
+                            {format(date, 'MM/dd', { locale: ja })}
+                          </p>
+                        );
+                      } catch {
+                        return <p className="text-xs text-funeral-500">-</p>;
+                      }
+                    })()}
                     {funeral.venue && (
                       <p className="text-xs text-funeral-500">{funeral.venue}</p>
                     )}

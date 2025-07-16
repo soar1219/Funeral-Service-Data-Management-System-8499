@@ -462,7 +462,7 @@ const OCRCapture = () => {
       let arabic = kanjiNorm
         .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 65248))
         .replace(/[,，]/g, '');
-      if (/^[一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卌陌佰阡仟萬]+$/.test(arabic)) {
+      if (/^[一二三四五六七八九十百千万億兆〇零壱弐貳参參肆伍陸漆柒捌玖拾廿卅卌陌佰阡仟萬]+$/.test(arabic)) {
         return kanjiToNumber(arabic);
       }
       // 漢数字+アラビア数字混在パターンも対応
@@ -543,12 +543,17 @@ const OCRCapture = () => {
       /([\S]+)[\s]*(商会|工業|建設|組|組合|事務所|医院|病院|クリニック|店|堂|舎|社|会|部|課|室)/
     ];
     let foundCompany = '';
+    let foundNameFromCompany = '';
     for (const [key, text] of allTextsNoPosition) {
       let textForCompany = text;
-      // 会社名の後ろに役職語が続く場合（例: 株式会社 代表取締役）を除去
-      if (foundPosition) {
-        textForCompany = textForCompany.replace(new RegExp(`([\S]+)[\s ]*${foundPosition}`), '$1');
+      // 会社名の後ろに役職語や氏名が続く場合を分離
+      const afterCompanyMatch = textForCompany.match(/((株式|有限|合名|合資|合同)会社[\S]*)[\s　]+((代表取締役|取締役|社長|副社長|専務|常務|会長|理事|監査役|執行役員|支店長|営業所長|本部長|部長|次長|課長|係長|主任|相談役|顧問|店長|センター長|マネージャー|リーダー|プロジェクトマネージャー|室長|主幹|主査|統括|総括|委員|代表|副代表|副部長|副課長|副主任|副店長|副会長|支配人|所長|校長|園長|学長|教授|准教授|講師|教諭|教頭|学部長|学科長|部門長|責任者|担当|係|委員長|幹事|監事|理事長|事務局長|事務長|事業部長|営業部長|総務部長|経理部長|人事部長|工場長|工事長|現場監督|キャプテン|ディレクター|プロデューサー|マスター|オーナー|パートナー|メンバー)?[\s　]*)?([一-龯ぁ-んァ-ヶー]{2,8}[\s　]+[一-龯ぁ-んァ-ヶー]{1,8})/);
+      if (afterCompanyMatch) {
+        foundCompany = afterCompanyMatch[1];
+        foundNameFromCompany = afterCompanyMatch[6] || afterCompanyMatch[7] || '';
+        break;
       }
+      // 通常の会社名パターン
       for (const pattern of companyPatterns) {
         const match = textForCompany.match(pattern);
         if (match) {
@@ -559,6 +564,10 @@ const OCRCapture = () => {
       if (foundCompany) break;
     }
     extracted.companyName = foundCompany;
+    // 会社名の後ろに氏名があった場合は氏名欄にセット
+    if (foundNameFromCompany) {
+      extracted.fullName = foundNameFromCompany.trim();
+    }
 
     // 氏名抽出（複数パターン・全OCR面横断）
     // まず表書きワードを除去
@@ -722,15 +731,15 @@ const OCRCapture = () => {
 
   // 香典の種類の選択肢
   const donationTypes = [
-    { value: '御霊前', label: '御霊前', category: '仏式・神式・キリスト教式' },
-    { value: '御仏前', label: '御仏前', category: '仏式（四十九日後）' },
-    { value: '御香典', label: '御香典', category: '仏式' },
-    { value: '御香料', label: '御香料', category: '仏式' },
-    { value: '御花料', label: '御花料', category: 'キリスト教式' },
-    { value: '御玉串料', label: '御玉串料', category: '神式' },
-    { value: '御榊料', label: '御榊料', category: '神式' },
-    { value: '御供物料', label: '御供物料', category: '神式' },
-    { value: '御弔慰料', label: '御弔慰料', category: '一般' }
+    { value: '御霊前', label: '御霊前' },
+    { value: '御仏前', label: '御仏前' },
+    { value: '御香典', label: '御香典' },
+    { value: '御香料', label: '御香料' },
+    { value: '御花料', label: '御花料' },
+    { value: '御玉串料', label: '御玉串料' },
+    { value: '御榊料', label: '御榊料' },
+    { value: '御供物料', label: '御供物料' },
+    { value: '御弔慰料', label: '御弔慰料' }
   ];
 
   return (
@@ -742,7 +751,7 @@ const OCRCapture = () => {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-funeral-800 mb-2">OCR入力</h1>
+            <h1 className="text-3xl font-bold text-funeral-800 mb-2">香典データの入力</h1>
             <p className="text-funeral-600 mb-2">
               {currentFuneral.familyName}家の香典袋をスキャンして自動入力します
             </p>
@@ -782,7 +791,7 @@ const OCRCapture = () => {
         </div>
         <div className="flex justify-between text-sm text-funeral-600">
           <span>画像選択</span>
-          <span>OCR処理</span>
+          <span>確認画面</span>
           <span>データ編集</span>
         </div>
       </div>
@@ -901,7 +910,7 @@ const OCRCapture = () => {
               disabled={!canProceedToOCR()}
               className="px-6 py-2 bg-funeral-600 text-white rounded-lg hover:bg-funeral-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              OCR処理へ進む
+              確認画面へ進む
             </button>
           </div>
         </motion.div>
@@ -914,7 +923,7 @@ const OCRCapture = () => {
           animate={{ opacity: 1 }}
           className="bg-white rounded-xl shadow-sm border border-funeral-200 p-6"
         >
-          <h2 className="text-xl font-bold text-funeral-800 mb-4">多面OCR処理</h2>
+          <h2 className="text-xl font-bold text-funeral-800 mb-4">読み取り画像の確認</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <h3 className="font-semibold text-funeral-700 mb-2">選択した画像</h3>
@@ -957,7 +966,7 @@ const OCRCapture = () => {
                     disabled={!googleVisionService.hasValidApiKey() || !canProceedToOCR()}
                     className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {googleVisionService.hasValidApiKey() ? 'OCR処理を開始' : 'API設定が必要です'}
+                    {googleVisionService.hasValidApiKey() ? '文字の読み取り' : 'API設定が必要です'}
                   </button>
                   {!googleVisionService.hasValidApiKey() && (
                     <p className="text-sm text-red-600 mt-2">
@@ -1060,7 +1069,7 @@ const OCRCapture = () => {
                     <option value="">選択してください</option>
                     {donationTypes.map(type => (
                       <option key={type.value} value={type.value}>
-                        {type.label} ({type.category})
+                        {type.label}
                       </option>
                     ))}
                   </select>

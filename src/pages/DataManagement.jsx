@@ -34,12 +34,20 @@ const DataManagement = () => {
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterByType, setFilterByType] = useState('');
 
+  // ページネーション用 state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(filteredDonations.length / itemsPerPage);
+
   useEffect(() => {
     let filtered = searchDonations(searchQuery);
     
     // 香典の種類でフィルター
     if (filterByType) {
-      filtered = filtered.filter(donation => donation.donationType === filterByType);
+      filtered = filtered.filter(donation =>
+        donation.donationType === filterByType ||
+        donation.donationtype === filterByType // snake_caseにも対応
+      );
     }
     
     // ソート
@@ -64,6 +72,12 @@ const DataManagement = () => {
     
     setFilteredDonations(filtered);
   }, [searchQuery, donations, sortBy, sortOrder, filterByType]);
+
+  useEffect(() => {
+    setCurrentPage(1); // 検索やフィルタ変更時は1ページ目に戻す
+  }, [searchQuery, donations, sortBy, sortOrder, filterByType]);
+
+  const pagedDonations = filteredDonations.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const handleEdit = (donation) => {
     setSelectedDonation(donation);
@@ -93,8 +107,13 @@ const DataManagement = () => {
 
     updateDonation(selectedDonation.id, {
       ...editForm,
+      donationType: editForm.donationType,
+      donation_type: editForm.donationType, // 両方セット
       amount: parseInt(editForm.amount) || 0,
-      innerAmount: parseInt(editForm.innerAmount) || 0
+      innerAmount: parseInt(editForm.innerAmount) || 0,
+      updatedAt: new Date().toISOString(),
+      // 作成日時が未設定の場合のみセット
+      createdAt: selectedDonation.createdAt || new Date().toISOString(),
     });
     
     setIsEditModalOpen(false);
@@ -155,10 +174,6 @@ const DataManagement = () => {
     return stats;
   }, {});
 
-  // 個人・法人別統計
-  const personalDonations = filteredDonations.filter(d => !d.companyName);
-  const corporateDonations = filteredDonations.filter(d => d.companyName);
-
   const totalAmount = filteredDonations.reduce((sum, d) => sum + (d.amount || 0), 0);
 
   return (
@@ -174,37 +189,9 @@ const DataManagement = () => {
 
       {/* 統計情報 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        {/* 個人・法人別統計 */}
-        <div className="bg-white rounded-xl shadow-sm border border-funeral-200 p-6">
-          <h2 className="text-lg font-semibold text-funeral-800 mb-4 flex items-center">
-            <SafeIcon icon={FiUsers} className="mr-2" />
-            個人・法人別
-          </h2>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-funeral-600">個人</span>
-              <div className="text-right">
-                <p className="font-semibold text-funeral-800">{personalDonations.length}件</p>
-                <p className="text-sm text-funeral-600">
-                  ¥{personalDonations.reduce((sum, d) => sum + (d.amount || 0), 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-funeral-600">法人</span>
-              <div className="text-right">
-                <p className="font-semibold text-funeral-800">{corporateDonations.length}件</p>
-                <p className="text-sm text-funeral-600">
-                  ¥{corporateDonations.reduce((sum, d) => sum + (d.amount || 0), 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* 香典の種類別統計 */}
         {Object.keys(typeStats).length > 0 && (
-          <div className="md:col-span-2 bg-white rounded-xl shadow-sm border border-funeral-200 p-6">
+          <div className="md:col-span-3 bg-white rounded-xl shadow-sm border border-funeral-200 p-6">
             <h2 className="text-lg font-semibold text-funeral-800 mb-4 flex items-center">
               <SafeIcon icon={FiTag} className="mr-2" />
               香典の種類別統計
@@ -330,9 +317,6 @@ const DataManagement = () => {
                     役職・続柄
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-funeral-500 uppercase tracking-wider">
-                    連名
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-funeral-500 uppercase tracking-wider">
                     住所
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-funeral-500 uppercase tracking-wider">
@@ -347,7 +331,7 @@ const DataManagement = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-funeral-200">
-                {filteredDonations.map((donation) => (
+                {pagedDonations.map((donation) => (
                   <motion.tr
                     key={donation.id}
                     initial={{ opacity: 0 }}
@@ -355,54 +339,34 @@ const DataManagement = () => {
                     className="hover:bg-funeral-50 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {donation.donationType ? (
+                      {donation.donationType || donation.donationtype ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {donation.donationType}
+                          {donation.donationType || donation.donationtype}
                         </span>
                       ) : (
                         <span className="text-funeral-400 text-sm">-</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        {donation.companyName ? (
-                          <div>
-                            <div className="flex items-center">
-                              <SafeIcon icon={FiBuilding} className="text-funeral-400 mr-1 text-sm" />
-                              <span className="font-medium text-funeral-800">{donation.companyName}</span>
-                            </div>
-                            {donation.fullName && (
-                              <div className="text-sm text-funeral-600 mt-1">{donation.fullName}</div>
-                            )}
+                      {donation.companyName || donation.companyname ? (
+                        <div>
+                          <div className="flex items-center">
+                            <SafeIcon icon={FiBuilding} className="text-funeral-400 mr-1 text-sm" />
+                            <span className="font-medium text-funeral-800">{donation.companyName || donation.companyname}</span>
                           </div>
-                        ) : (
-                          <div className="font-medium text-funeral-800">
-                            {donation.fullName || donation.name || '-'}
-                          </div>
-                        )}
-                      </div>
+                          {(donation.fullName || donation.fullname || donation.name) && (
+                            <div className="text-sm text-funeral-600 mt-1">{donation.fullName || donation.fullname || donation.name}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="font-medium text-funeral-800">
+                          {donation.fullName || donation.fullname || donation.name || '-'}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-funeral-600">
                         {donation.position || donation.relationship || '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-funeral-600 text-sm">
-                        {donation.coNames && donation.coNames.length > 0 ? (
-                          <div>
-                            {donation.coNames.slice(0, 2).map((name, index) => (
-                              <div key={index}>{name}</div>
-                            ))}
-                            {donation.coNames.length > 2 && (
-                              <div className="text-xs text-funeral-400">
-                                他{donation.coNames.length - 2}名
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          '-'
-                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -410,17 +374,38 @@ const DataManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="font-semibold text-funeral-800">
-                        ¥{donation.amount?.toLocaleString() || 0}
+                        ¥{(donation.amount ?? donation.amount ?? donation.amount) ? (donation.amount ?? donation.amount ?? 0).toLocaleString() : '-'}
                       </div>
-                      {donation.innerAmount && donation.innerAmount !== donation.amount && (
-                        <div className="text-xs text-funeral-500">
-                          (中袋: ¥{donation.innerAmount.toLocaleString()})
-                        </div>
-                      )}
+                      {(() => {
+                        const inner = donation.innerAmount ?? donation.inneramount;
+                        const amount = donation.amount ?? donation.amount;
+                        if (
+                          inner &&
+                          amount &&
+                          inner !== amount
+                        ) {
+                          return (
+                            <div className="text-xs text-funeral-500">
+                              (中袋: ¥{inner.toLocaleString()})
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-funeral-600 text-sm">
-                        {format(new Date(donation.createdAt), 'yyyy/MM/dd HH:mm', { locale: ja })}
+                        {(() => {
+                          const created = donation.createdAt || donation.createdat || donation.created_at;
+                          if (!created) return '-';
+                          const date = new Date(created);
+                          if (isNaN(date.getTime())) return '-';
+                          try {
+                            return format(date, 'yyyy/MM/dd HH:mm', { locale: ja });
+                          } catch {
+                            return '-';
+                          }
+                        })()}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -443,6 +428,28 @@ const DataManagement = () => {
                 ))}
               </tbody>
             </table>
+            {/* ページャー: 10件以上の時のみ表示 */}
+            {filteredDonations.length > itemsPerPage && (
+              <div className="flex justify-center items-center py-4 space-x-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 rounded ${currentPage === 1 ? 'bg-funeral-100 text-funeral-400 cursor-not-allowed' : 'bg-funeral-50 text-funeral-700 hover:bg-funeral-200'}`}
+                >前へ</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 rounded ${currentPage === page ? 'bg-funeral-600 text-white' : 'bg-funeral-50 text-funeral-700 hover:bg-funeral-200'}`}
+                  >{page}</button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-1 rounded ${currentPage === totalPages ? 'bg-funeral-100 text-funeral-400 cursor-not-allowed' : 'bg-funeral-50 text-funeral-700 hover:bg-funeral-200'}`}
+                >次へ</button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-12">
@@ -470,8 +477,8 @@ const DataManagement = () => {
               <div>
                 <label className="block text-sm font-medium text-funeral-700 mb-1">香典の種類</label>
                 <select
-                  value={editForm.donationType}
-                  onChange={(e) => setEditForm({ ...editForm, donationType: e.target.value })}
+                  value={editForm.donationType || editForm.donationtype}
+                  onChange={e => setEditForm({ ...editForm, donationType: e.target.value, donationtype: e.target.value })}
                   className="w-full px-3 py-2 border border-funeral-300 rounded-lg focus:ring-2 focus:ring-funeral-500 focus:border-funeral-500"
                 >
                   <option value="">選択してください</option>

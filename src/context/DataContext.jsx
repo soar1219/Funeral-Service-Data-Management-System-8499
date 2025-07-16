@@ -306,6 +306,34 @@ export const DataProvider = ({ children }) => {
     );
   };
 
+  // データエクスポート（JSONファイルとしてダウンロード）
+  const exportData = () => {
+    try {
+      if (!currentFuneral) {
+        toast.error('葬儀が選択されていません');
+        return;
+      }
+      const exportObj = {
+        funeral: currentFuneral,
+        donations: donations
+      };
+      const json = JSON.stringify(exportObj, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `koden_export_${currentFuneral.familyName || 'funeral'}_${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('データをエクスポートしました');
+    } catch (error) {
+      console.error('エクスポートエラー:', error);
+      toast.error('データのエクスポートに失敗しました');
+    }
+  };
+
   // 設定・エクスポート・インポート・ストレージ監視などは必要に応じて残す
 
   const value = {
@@ -329,7 +357,10 @@ export const DataProvider = ({ children }) => {
     isLoading,
     isSyncing,
     setIsLoading,
-    supabaseConnected: !!supabase
+    supabaseConnected: !!supabase,
+
+    // エクスポート
+    exportData,
   };
 
   return (
