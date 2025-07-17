@@ -547,7 +547,7 @@ const OCRCapture = () => {
     for (const [key, text] of allTextsNoPosition) {
       let textForCompany = text;
       // 会社名の後ろに役職語や氏名が続く場合を分離
-      const afterCompanyMatch = textForCompany.match(/((株式|有限|合名|合資|合同)会社[\S]*)[\s ]+((代表取締役|取締役|社長|副社長|専務|常務|会長|理事|監査役|執行役員|支店長|営業所長|本部長|部長|次長|課長|係長|主任|相談役|顧問|店長|センター長|マネージャー|リーダー|プロジェクトマネージャー|室長|主幹|主査|統括|総括|委員|代表|副代表|副部長|副課長|副主任|副店長|副会長|支配人|所長|校長|園長|学長|教授|准教授|講師|教諭|教頭|学部長|学科長|部門長|責任者|担当|係|委員長|幹事|監事|理事長|事務局長|事務長|事業部長|営業部長|総務部長|経理部長|人事部長|工場長|工事長|現場監督|キャプテン|ディレクター|プロデューサー|マスター|オーナー|パートナー|メンバー)?[\s ]*)?([一-龯ぁ-んァ-ヶー]{2,8}[\s ]+[一-龯ぁ-んァ-ヶー]{1,8})/);
+      const afterCompanyMatch = textForCompany.match(/((株式|有限|合名|合資|合同)会社[\S]*)[\s ]+((代表取締役|取締役|社長|副社長|専務|常務|会長|理事|監査役|執行役員|支店長|営業所長|本部長|部長|次長|課長|係長|主任|相談役|顧問|店長|センター長|マネージャー|リーダー|プロジェクトマネージャー|室長|主幹|主査|統括|総括|委員|代表|副代表|副部長|副課長|副主任|副店長|副会長|支配人|所長|校長|園長|学長|教授|准教授|講師|教諭|教頭|学部長|学科長|部門長|責任者|担当|係|委員長|幹事|監事|理事長|事務局長|事務長|事業部長|営業部長|総務部長|経理部長|人事部長|工場長|工事長|現場監督|キャプテン|ディレクター|プロデューサー|マスター|オーナー|パートナー|メンバー)?[\s ]*)?([一-龯ぁ-んァ-ヶー]{2,8}[\s]+[一-龯ぁ-んァ-ヶー]{1,8})/);
       if (afterCompanyMatch) {
         foundCompany = afterCompanyMatch[1];
         foundNameFromCompany = afterCompanyMatch[6] || afterCompanyMatch[7] || '';
@@ -725,9 +725,6 @@ const OCRCapture = () => {
     }
   };
 
-  const openApiSettings = () => {
-    setShowSetup(true);
-  };
 
   // 香典の種類の選択肢
   const donationTypes = [
@@ -759,13 +756,6 @@ const OCRCapture = () => {
               <p className="text-sm text-funeral-500">故 {currentFuneral.deceasedName} 様</p>
             )}
           </div>
-          <button
-            onClick={openApiSettings}
-            className="flex items-center space-x-2 px-4 py-2 text-funeral-600 border border-funeral-300 rounded-lg hover:bg-funeral-50 transition-colors"
-          >
-            <SafeIcon icon={FiCloud} />
-            <span>API設定</span>
-          </button>
         </div>
       </motion.div>
 
@@ -1303,15 +1293,6 @@ const OCRCapture = () => {
           </motion.div>
         </div>
       )}
-
-      {/* Google Vision Setup Modal */}
-      <GoogleVisionSetup
-        isOpen={showSetup}
-        onClose={() => setShowSetup(false)}
-        onComplete={() => {
-          toast.success('Google Cloud Vision API の設定が完了しました');
-        }}
-      />
     </div>
   );
 };

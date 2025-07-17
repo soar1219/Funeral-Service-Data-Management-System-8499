@@ -91,7 +91,7 @@ const Settings = () => {
             >
               <SafeIcon icon={FiX} />
             </button>
-            <GoogleVisionSetup />
+            <GoogleVisionSetup isOpen={showApiSettings} onClose={closeApiSettings} />
           </div>
         </div>
       )}
